@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { apiFetch } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner, EmptyState } from '@/components/shared/LoadingStates';
 import { toast } from 'sonner';
-import { Bell, CheckCircle2, AlertCircle, XCircle, Info, Check } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, XCircle, Info, Check, BellRing, BellOff } from 'lucide-react';
+import { subscribeToPush, getNotificationPermission, isPushSupported, unsubscribeFromPush } from '@/lib/push';
 
 interface NotificationItem {
   id: string;
@@ -24,6 +26,46 @@ export function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [readBroadcasts, setReadBroadcasts] = useState<string[]>([]);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported' | null>(null);
+  const [enablingPush, setEnablingPush] = useState(false);
+
+  // Check current push permission status on mount
+  useEffect(() => {
+    setPushPermission(isPushSupported() ? getNotificationPermission() : 'unsupported');
+  }, []);
+
+  async function handleEnableNotifications() {
+    if (!user?.id) return;
+    setEnablingPush(true);
+    try {
+      const result = await subscribeToPush(user.id);
+      if (result === 'granted') {
+        setPushPermission('granted');
+        toast.success('🔔 Push notifications enabled! You will now receive alerts.');
+      } else if (result === 'denied') {
+        setPushPermission('denied');
+        toast.error('Notifications blocked. Please enable them in your browser/phone settings.');
+      } else if (result === 'unsupported') {
+        toast.error('Push notifications are not supported on this device/browser.');
+      } else {
+        toast.error('Failed to enable notifications. Please try again.');
+      }
+    } catch {
+      toast.error('Failed to enable notifications.');
+    } finally {
+      setEnablingPush(false);
+    }
+  }
+
+  async function handleDisableNotifications() {
+    try {
+      await unsubscribeFromPush();
+      setPushPermission('default');
+      toast.success('Notifications disabled for this device.');
+    } catch {
+      toast.error('Failed to disable notifications.');
+    }
+  }
 
   // Load read broadcasts from localStorage
   useEffect(() => {
@@ -40,6 +82,53 @@ export function NotificationsPage() {
   useEffect(() => {
     fetchNotifications();
   }, [user?.id]);
+
+  // ── Supabase Realtime: sync broadcast edits/inserts instantly ──
+  useEffect(() => {
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: 'user_id=is.null' },
+        (payload) => {
+          const updated = payload.new as any;
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.id === updated.id
+                ? {
+                    ...n,
+                    title: updated.title,
+                    message: updated.message,
+                    type: updated.type,
+                  }
+                : n
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=is.null' },
+        (payload) => {
+          const n = payload.new as any;
+          const newItem: NotificationItem = {
+            id: n.id,
+            userId: null,
+            title: n.title,
+            message: n.message,
+            type: n.type,
+            isRead: false,
+            createdAt: n.created_at,
+          };
+          setNotifications((prev) => [newItem, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Synchronize unread count globally in real-time
   useEffect(() => {
@@ -148,6 +237,60 @@ export function NotificationsPage() {
           </Button>
         )}
       </div>
+
+      {/* ── Push Notification Permission Banner ── */}
+      {pushPermission === 'default' && (
+        <div className="mb-5 rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-900/40 to-fuchsia-900/40 p-4 flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0">
+              <BellRing className="w-5 h-5 text-violet-400 animate-bounce" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Enable Push Notifications</p>
+              <p className="text-xs text-slate-400 mt-0.5">Tap below to get instant alerts from admin — announcements, updates &amp; more.</p>
+            </div>
+          </div>
+          <button
+            id="enable-push-btn"
+            onClick={handleEnableNotifications}
+            disabled={enablingPush}
+            className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-violet-900/40 disabled:opacity-60 cursor-pointer active:scale-95"
+          >
+            <BellRing className="w-4 h-4" />
+            {enablingPush ? 'Enabling...' : 'Enable Notifications'}
+          </button>
+        </div>
+      )}
+
+      {pushPermission === 'denied' && (
+        <div className="mb-5 rounded-2xl border border-rose-500/30 bg-rose-900/20 p-4 flex items-center gap-3">
+          <BellOff className="w-5 h-5 text-rose-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-rose-300">Notifications Blocked</p>
+            <p className="text-xs text-slate-400 mt-0.5">Go to your browser/phone Settings → Site Settings → Notifications → Allow for this site.</p>
+          </div>
+        </div>
+      )}
+
+      {pushPermission === 'granted' && (
+        <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-900/20 p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-emerald-300">Push Notifications Active</p>
+              <p className="text-xs text-slate-400">You'll receive instant alerts on this device.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleDisableNotifications}
+            className="text-xs text-slate-500 hover:text-rose-400 transition-colors cursor-pointer underline shrink-0"
+          >
+            Disable
+          </button>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
         <EmptyState

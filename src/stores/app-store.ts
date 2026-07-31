@@ -11,6 +11,7 @@ export type Page =
   | 'report-status'
   | 'payout'
   | 'trainings'
+  | 'qnas'
   | 'leaderboard'
   | 'customer-care'
   | 'seasons'
@@ -26,23 +27,13 @@ export type Page =
   | 'admin-payouts'
   | 'admin-passive-payouts'
   | 'admin-trainings'
+  | 'admin-qnas'
   | 'admin-leaderboard'
   | 'admin-seasons'
   | 'admin-settings'
   | 'admin-audit'
-  | 'admin-notifications';
-
-interface AppState {
-  currentPage: Page;
-  setPage: (page: Page) => void;
-  user: AuthUserType | null;
-  setUser: (user: AuthUserType | null) => void;
-  logout: () => void;
-  unreadNotificationsCount: number;
-  setUnreadNotificationsCount: (count: number) => void;
-  refreshTrigger: number;
-  triggerRefresh: () => void;
-}
+  | 'admin-notifications'
+  | 'admin-passive-withdrawals';
 
 export interface AuthUserType {
   id: string;
@@ -57,6 +48,29 @@ export interface AuthUserType {
   profilePhoto: string;
 }
 
+export interface CelebrationData {
+  name: string;
+  email: string;
+  password: string;
+  referralId?: string;
+  userData: AuthUserType;
+}
+
+interface AppState {
+  currentPage: Page;
+  setPage: (page: Page) => void;
+  user: AuthUserType | null;
+  setUser: (user: AuthUserType | null) => void;
+  logout: () => void;
+  unreadNotificationsCount: number;
+  setUnreadNotificationsCount: (count: number) => void;
+  refreshTrigger: number;
+  triggerRefresh: () => void;
+  // Celebration overlay — stored globally so it survives auth-triggered remounts
+  pendingCelebration: CelebrationData | null;
+  setPendingCelebration: (data: CelebrationData | null) => void;
+}
+
 export const useAppStore = create<AppState>((set) => ({
   currentPage: 'landing',
   setPage: (page) => set({ currentPage: page }),
@@ -66,10 +80,11 @@ export const useAppStore = create<AppState>((set) => ({
   setUnreadNotificationsCount: (unreadNotificationsCount) => set({ unreadNotificationsCount }),
   refreshTrigger: 0,
   triggerRefresh: () => set((state) => ({ refreshTrigger: state.refreshTrigger + 1 })),
+  pendingCelebration: null,
+  setPendingCelebration: (data) => set({ pendingCelebration: data }),
   logout: () => {
     supabase.auth.signOut();
     localStorage.removeItem('fintech_token');
-    set({ user: null, currentPage: 'landing', unreadNotificationsCount: 0, refreshTrigger: 0 });
+    set({ user: null, currentPage: 'landing', unreadNotificationsCount: 0, refreshTrigger: 0, pendingCelebration: null });
   },
 }));
-

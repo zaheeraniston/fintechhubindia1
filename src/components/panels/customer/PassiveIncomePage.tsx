@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { apiFetch } from '@/lib/api';
 import { TrendingUp, Award, Layers, RefreshCw, IndianRupee, Users, Wallet } from 'lucide-react';
+import { PassiveWithdrawModal } from './PassiveWithdrawModal';
 
 interface PassiveTx {
   id: string;
@@ -87,39 +88,13 @@ export function PassiveIncomePage() {
         </button>
       </div>
 
-      {/* ── UNDER CONSTRUCTION MODAL ── */}
+      {/* ── WITHDRAW MODAL ── */}
       {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-violet-950 border border-violet-500/30 rounded-3xl p-8 max-w-sm w-full text-center shadow-[0_25px_80px_rgba(139,92,246,0.35)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Glow */}
-            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5" />
-            <div className="relative z-10">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-400/10 border border-amber-400/30 flex items-center justify-center mx-auto mb-5 text-4xl shadow-lg">
-                🚧
-              </div>
-              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
-                Coming Soon
-              </div>
-              <h2 className="text-xl font-black text-white mb-2">Under Construction</h2>
-              <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                Passive income withdrawal is coming very soon! We're building it and will notify you once it's live.
-              </p>
-              <button
-                onClick={() => setShowModal(false)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-bold text-sm transition-all duration-300 cursor-pointer active:scale-[0.98]"
-              >
-                Got it, I'll wait! 🙌
-              </button>
-            </div>
-          </div>
-        </div>
+        <PassiveWithdrawModal 
+          onClose={() => setShowModal(false)} 
+          availableBalance={totalPassive}
+          onSuccess={fetchPassive}
+        />
       )}
 
       {/* Important Note */}

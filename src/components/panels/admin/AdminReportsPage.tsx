@@ -142,6 +142,9 @@ export function AdminReportsPage() {
               <SelectItem value="trade_pending">Trade Pending</SelectItem>
               <SelectItem value="trade_completed">Trade Completed</SelectItem>
               <SelectItem value="done">Done</SelectItem>
+              <SelectItem value="lead_received">Lead Recived</SelectItem>
+              <SelectItem value="payment_clex">Payment Clex</SelectItem>
+              <SelectItem value="no_lead_check_clint_info">No Lead Check Clint Info.</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -277,6 +280,9 @@ export function AdminReportsPage() {
                   <option value="trade_pending">Trade Pending</option>
                   <option value="trade_completed">Trade Completed</option>
                   <option value="done">Done (Credit Income)</option>
+                  <option value="lead_received">Lead Recived</option>
+                  <option value="payment_clex">Payment Clex</option>
+                  <option value="no_lead_check_clint_info">No Lead Check Clint Info.</option>
                 </select>
               </div>
               <div>

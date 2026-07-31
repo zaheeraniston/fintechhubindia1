@@ -767,6 +767,7 @@ export function LandingPage() {
                 state: 'KARNATAKA',
                 earnings: '₹28,45,000+',
                 img: '/vip-pradeep.jpg',
+                imgPosition: 'object-bottom',
               },
               {
                 name: 'SAMEER KHAN',
@@ -813,7 +814,7 @@ export function LandingPage() {
                   
                   {/* VIP Badge */}
                   <div className="absolute top-6 right-6 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 text-[9px] font-black uppercase tracking-widest shadow-md shadow-amber-500/10">
-                    VIP ELITE
+                    VIP
                   </div>
 
                   {/* Profile Picture with gold glow ring */}
@@ -822,7 +823,7 @@ export function LandingPage() {
                       <img
                         src={member.img}
                         alt={member.name}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${member.imgPosition || ''}`}
                         onError={(e) => {
                           e.currentTarget.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80";
                         }}
@@ -1073,6 +1074,7 @@ export function LandingPage() {
             &copy; {new Date().getFullYear()} Fintech Hub India. All rights reserved.<br/>
             <span className="text-[10px] text-slate-500">Disclaimer: Earning results vary based on commitment, marketing skill, and active team building.</span>
           </p>
+
         </div>
       </footer>
 
@@ -1123,6 +1125,7 @@ export function LandingPage() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

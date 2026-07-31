@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { toast } from 'sonner';
-import { Wallet, ArrowRight, CheckCircle2, Clock, XCircle, IndianRupee, TrendingDown, Search, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Wallet, ArrowRight, CheckCircle2, Clock, XCircle, IndianRupee, TrendingDown, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface PayoutItem {
@@ -27,7 +27,7 @@ interface PayoutItem {
   user?: { fullName: string; email: string };
 }
 
-export function AdminPayoutsPage() {
+export function AdminPassiveWithdrawalsPage() {
   const [payouts, setPayouts] = useState<PayoutItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionPayout, setActionPayout] = useState<PayoutItem | null>(null);
@@ -37,18 +37,12 @@ export function AdminPayoutsPage() {
   const [acting, setActing] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
-  const [clearStep, setClearStep] = useState<1 | 2>(1); // step 1 = warning, step 2 = final confirm
-  const [clearConfirmText, setClearConfirmText] = useState('');
-  const [statsCutoff, setStatsCutoff] = useState<string | null>(() =>
-    localStorage.getItem('payout_stats_cutoff')
-  );
 
   useEffect(() => { fetchPayouts(); }, []);
 
   async function fetchPayouts() {
     setLoading(true);
-    try { const data = await apiFetch('/payouts'); setPayouts(data.data || []); }
+    try { const data = await apiFetch('/passive-payouts'); setPayouts(data.data || []); }
     catch { toast.error('Failed'); }
     finally { setLoading(false); }
   }
@@ -64,8 +58,8 @@ export function AdminPayoutsPage() {
     if (!actionPayout) return;
     setActing(true);
     try {
-      await apiFetch(`/payouts/${actionPayout.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus, adminNotes }) });
-      toast.success('Payout updated');
+      await apiFetch(`/passive-payouts/${actionPayout.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus, adminNotes }) });
+      toast.success('Passive Payout updated');
       setActionOpen(false);
       fetchPayouts();
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); }
@@ -74,28 +68,16 @@ export function AdminPayoutsPage() {
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
-  // ── Summary stats: only count payouts AFTER the stats cutoff date ──
-  const statsPayouts = statsCutoff
-    ? payouts.filter(p => new Date(p.createdAt) > new Date(statsCutoff))
-    : payouts;
-
-  const completedPayouts  = statsPayouts.filter(p => p.status === 'completed');
-  const pendingPayouts    = statsPayouts.filter(p => p.status === 'pending');
-  const processingPayouts = statsPayouts.filter(p => p.status === 'processing');
-  const rejectedPayouts   = statsPayouts.filter(p => p.status === 'rejected');
+  const completedPayouts = payouts.filter(p => p.status === 'completed');
+  const pendingPayouts   = payouts.filter(p => p.status === 'pending');
+  const processingPayouts = payouts.filter(p => p.status === 'processing');
+  const rejectedPayouts  = payouts.filter(p => p.status === 'rejected');
 
   const totalCompleted  = completedPayouts.reduce((s, p) => s + p.amount, 0);
   const totalPending    = pendingPayouts.reduce((s, p) => s + p.amount, 0);
   const totalProcessing = processingPayouts.reduce((s, p) => s + p.amount, 0);
-  const totalAllTime    = statsPayouts.reduce((s, p) => s + p.amount, 0);
+  const totalAllTime    = payouts.reduce((s, p) => s + p.amount, 0);
 
-  // Still use ALL payouts for the filter dropdowns and table (unaffected)
-  const allCompletedCount  = payouts.filter(p => p.status === 'completed').length;
-  const allPendingCount    = payouts.filter(p => p.status === 'pending').length;
-  const allProcessingCount = payouts.filter(p => p.status === 'processing').length;
-  const allRejectedCount   = payouts.filter(p => p.status === 'rejected').length;
-
-  // ── Filter payouts by status + search (uses ALL payouts — table unaffected by cutoff) ──
   const filteredPayouts = payouts.filter(p => {
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     if (!matchStatus) return false;
@@ -120,24 +102,14 @@ export function AdminPayoutsPage() {
             <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shadow-lg">
               <Wallet className="w-4 h-4 text-white" />
             </span>
-            Payout Management
+            Passive Withdrawals Management
           </h1>
-          <p className="text-sm text-slate-400 mt-1">{payouts.length} total payout requests</p>
+          <p className="text-sm text-slate-400 mt-1">{payouts.length} total passive withdrawal requests</p>
         </div>
-        {/* Clear Stats Button */}
-        <Button
-          variant="outline"
-          onClick={() => { setClearStep(1); setClearConfirmText(''); setClearConfirmOpen(true); }}
-          className="border-rose-500/30 text-rose-400 hover:text-white hover:bg-rose-500/15 hover:border-rose-500/50 rounded-xl cursor-pointer h-9 px-4 text-xs font-bold flex items-center gap-2 transition-all"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          Clear Stats
-        </Button>
       </div>
 
       {/* ── Summary Stats Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Total Withdrawn (Completed) */}
         <Card className="glass-premium border border-emerald-500/20 shadow-lg rounded-2xl overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -151,7 +123,6 @@ export function AdminPayoutsPage() {
           </CardContent>
         </Card>
 
-        {/* Total Pending */}
         <Card className="glass-premium border border-amber-500/20 shadow-lg rounded-2xl overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -165,7 +136,6 @@ export function AdminPayoutsPage() {
           </CardContent>
         </Card>
 
-        {/* Processing */}
         <Card className="glass-premium border border-blue-500/20 shadow-lg rounded-2xl overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -179,7 +149,6 @@ export function AdminPayoutsPage() {
           </CardContent>
         </Card>
 
-        {/* Total All-Time Requested */}
         <Card className="glass-premium border border-violet-500/20 shadow-lg rounded-2xl overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -189,24 +158,10 @@ export function AdminPayoutsPage() {
               </div>
             </div>
             <p className="text-2xl font-black text-white">{fmt(totalAllTime)}</p>
-            <p className="text-[10px] text-violet-400 mt-1 font-semibold">{statsPayouts.length} total requests</p>
+            <p className="text-[10px] text-violet-400 mt-1 font-semibold">{payouts.length} total requests</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Cutoff notice banner */}
-      {statsCutoff && (
-        <div className="flex items-center gap-3 bg-rose-500/10 border border-rose-500/25 rounded-xl px-4 py-2.5 text-xs text-rose-300">
-          <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-          <span className="flex-1">
-            Stats cleared on <span className="font-bold">{new Date(statsCutoff).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span> — only showing transactions from after that point.
-          </span>
-          <button
-            onClick={() => { setStatsCutoff(null); localStorage.removeItem('payout_stats_cutoff'); toast.success('Stats reset to all-time'); }}
-            className="underline hover:text-white transition-colors cursor-pointer shrink-0"
-          >Reset</button>
-        </div>
-      )}
 
       {/* ── Filter Bar ── */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -226,10 +181,10 @@ export function AdminPayoutsPage() {
           className="h-10 rounded-xl border border-white/10 px-3 text-xs bg-slate-900 text-white focus:outline-none focus:border-violet-500 transition-colors"
         >
           <option value="all">All Status ({payouts.length})</option>
-          <option value="pending">Pending ({allPendingCount})</option>
-          <option value="processing">Processing ({allProcessingCount})</option>
-          <option value="completed">Completed ({allCompletedCount})</option>
-          <option value="rejected">Rejected ({allRejectedCount})</option>
+          <option value="pending">Pending ({pendingPayouts.length})</option>
+          <option value="processing">Processing ({processingPayouts.length})</option>
+          <option value="completed">Completed ({completedPayouts.length})</option>
+          <option value="rejected">Rejected ({rejectedPayouts.length})</option>
         </select>
         <p className="text-xs text-slate-400 ml-auto">{filteredPayouts.length} shown</p>
       </div>
@@ -257,7 +212,7 @@ export function AdminPayoutsPage() {
                 {filteredPayouts.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-slate-500 text-sm">
-                      No payout requests found.
+                      No passive payout requests found.
                     </td>
                   </tr>
                 ) : filteredPayouts.map((p) => (
@@ -296,7 +251,7 @@ export function AdminPayoutsPage() {
 
       <Dialog open={actionOpen} onOpenChange={setActionOpen}>
         <DialogContent className="bg-slate-950 border border-violet-500/20 text-white shadow-2xl rounded-2xl">
-          <DialogHeader><DialogTitle className="text-white font-bold">Update Payout</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-white font-bold">Update Passive Payout</DialogTitle></DialogHeader>
           {actionPayout && (
             <div className="space-y-4 mt-4">
               <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 text-sm space-y-1">
@@ -333,85 +288,6 @@ export function AdminPayoutsPage() {
               <Button onClick={handleAction} disabled={acting} className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white cursor-pointer rounded-xl py-5">
                 {acting ? 'Updating...' : 'Update'}
               </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Clear Stats Confirmation Modal ── */}
-      <Dialog open={clearConfirmOpen} onOpenChange={(open) => { setClearConfirmOpen(open); if (!open) { setClearStep(1); setClearConfirmText(''); } }}>
-        <DialogContent className="bg-slate-950 border border-rose-500/30 text-white shadow-2xl rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-white font-bold flex items-center gap-2">
-              <span className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
-              </span>
-              {clearStep === 1 ? 'Clear Stats Data?' : 'Final Confirmation'}
-            </DialogTitle>
-          </DialogHeader>
-
-          {clearStep === 1 && (
-            <div className="space-y-4 mt-2">
-              {/* Warning banner */}
-              <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-4 space-y-2">
-                <p className="text-sm font-bold text-rose-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" /> What will happen:
-                </p>
-                <ul className="text-xs text-slate-300 space-y-1.5 pl-2">
-                  <li className="flex items-start gap-2"><span className="text-rose-400 mt-0.5">•</span> The 4 stats cards (Total Withdrawn, Pending, Processing, All-Time) will reset to ₹0.</li>
-                  <li className="flex items-start gap-2"><span className="text-rose-400 mt-0.5">•</span> Only new transactions <span className="font-bold text-white">&nbsp;from this moment onwards&nbsp;</span> will count in stats.</li>
-                  <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">✓</span> All customer payout records below are <span className="font-bold text-white">&nbsp;completely safe&nbsp;</span> — nothing is deleted.</li>
-                  <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">✓</span> You can undo this anytime using the Reset button that will appear.</li>
-                </ul>
-              </div>
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setClearConfirmOpen(false)} className="flex-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => setClearStep(2)}
-                  className="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold rounded-xl cursor-pointer"
-                >
-                  Continue →
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {clearStep === 2 && (
-            <div className="space-y-4 mt-2">
-              <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-4">
-                <p className="text-sm text-slate-300">
-                  Type <span className="font-black text-rose-400 tracking-wider">CLEAR STATS</span> below to confirm this action.
-                </p>
-              </div>
-              <input
-                type="text"
-                value={clearConfirmText}
-                onChange={(e) => setClearConfirmText(e.target.value)}
-                placeholder="Type: CLEAR STATS"
-                className="w-full h-11 rounded-xl border border-white/10 px-4 text-sm bg-slate-900 text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500 transition-colors tracking-wide"
-              />
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setClearStep(1)} className="flex-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer">
-                  ← Back
-                </Button>
-                <Button
-                  disabled={clearConfirmText !== 'CLEAR STATS'}
-                  onClick={() => {
-                    const now = new Date().toISOString();
-                    setStatsCutoff(now);
-                    localStorage.setItem('payout_stats_cutoff', now);
-                    setClearConfirmOpen(false);
-                    setClearStep(1);
-                    setClearConfirmText('');
-                    toast.success('Stats cleared! Showing data from now onwards.');
-                  }}
-                  className="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold rounded-xl cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" /> Yes, Clear Stats
-                </Button>
-              </div>
             </div>
           )}
         </DialogContent>

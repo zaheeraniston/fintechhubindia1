@@ -84,6 +84,54 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     return { token: data.session?.access_token, user: userProfile };
   }
 
+  // ── Forgot Password Request ──
+  if (path === '/auth/forgot-password') {
+    const { email } = body;
+    if (!email) throw new Error('Email is required');
+
+    // Verify if user exists in public.users to prevent sending resets to unregistered emails
+    const { data: userExists, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (checkError) throw new Error(checkError.message);
+    if (!userExists) throw new Error('No account found with this email address.');
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw new Error(error.message);
+
+    return { success: true };
+  }
+
+  // ── Reset Password with OTP ──
+  if (path === '/auth/reset-password') {
+    const { email, token, password } = body;
+    if (!email || !token || !password) {
+      throw new Error('Email, reset token, and password are required');
+    }
+
+    // Step 1: Verify OTP (this authenticates the session)
+    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+    if (verifyError) throw new Error(verifyError.message || 'Invalid or expired reset token');
+
+    // Step 2: Update the password for the currently authenticated session
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+    });
+    if (updateError) throw new Error(updateError.message);
+
+    // Step 3: Sign out so they must log in manually with the new password
+    await supabase.auth.signOut();
+
+    return { success: true };
+  }
+
   // ── Daily Access Code Verification (for signup page pre-check) ──
   if (path === '/auth/verify-access-code') {
     const { code } = body;
@@ -194,6 +242,20 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
   // ── Notifications Endpoints ──
   if (path.startsWith('/notifications')) {
+    // ── Edit (update) an existing broadcast ──
+    if (method === 'PUT' && path.startsWith('/notifications/') && path !== '/notifications/send-broadcast' && path !== '/notifications/mark-read') {
+      const id = path.split('/')[2];
+      const { title, message, type } = body;
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ title, message, type })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return { success: true, data };
+    }
+
     if (path === '/notifications/send-broadcast') {
       const { title, message, type } = body;
       const { data, error } = await supabase
@@ -320,10 +382,10 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         .select()
         .single();
       if (error) throw error;
-      
+
       // Log audit action
       await logAuditAction('CREATE_APP', `Created app ${appName} with payout ₹${amount}`);
-      
+
       return data;
     }
   }
@@ -373,11 +435,12 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         link: l.link,
         status: l.status,
         sortOrder: l.sort_order,
+        logoUrl: l.logo_url || '',
       }));
       return { data: mapped };
     }
     if (method === 'POST') {
-      const { appName, link, status, sortOrder } = body;
+      const { appName, link, status, sortOrder, logoUrl } = body;
       const { data, error } = await supabase
         .from('active_links')
         .insert({
@@ -385,6 +448,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
           link,
           status,
           sort_order: sortOrder || 0,
+          logo_url: logoUrl || '',
         })
         .select()
         .single();
@@ -398,7 +462,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   if (path.startsWith('/links/')) {
     const id = path.split('/')[2];
     if (method === 'PUT') {
-      const { appName, link, status, sortOrder } = body;
+      const { appName, link, status, sortOrder, logoUrl } = body;
       const { data, error } = await supabase
         .from('active_links')
         .update({
@@ -406,6 +470,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
           link,
           status,
           sort_order: sortOrder,
+          logo_url: logoUrl,
         })
         .eq('id', id)
         .select()
@@ -460,11 +525,11 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         amount: r.amount,
         adminNotes: r.admin_notes,
         createdAt: r.created_at,
-        user: r.users ? { 
-          fullName: r.users.full_name, 
-          email: r.users.email, 
-          processId: r.users.process_id, 
-          referralId: r.users.referral_id 
+        user: r.users ? {
+          fullName: r.users.full_name,
+          email: r.users.email,
+          processId: r.users.process_id,
+          referralId: r.users.referral_id
         } : undefined,
         app: r.app_catalog ? { appName: r.app_catalog.app_name, amount: r.amount } : undefined,
       }));
@@ -472,7 +537,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     }
     if (method === 'POST') {
       const { appId, name, phone, accountOpenDate } = body;
-      
+
       // Fetch current app amount to lock it in
       const { data: app } = await supabase
         .from('app_catalog')
@@ -507,7 +572,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     const id = path.split('/')[2];
     if (method === 'PUT') {
       const { status, adminNotes, tradeSubmitted } = body;
-      
+
       if (status === 'done') {
         const { data: rpcData, error: rpcError } = await supabase.rpc('approve_and_credit_report', {
           p_report_id: id,
@@ -535,16 +600,16 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
           amount: r.amount,
           adminNotes: r.admin_notes,
           createdAt: r.created_at,
-          user: r.users ? { 
-            fullName: r.users.full_name, 
-            email: r.users.email, 
-            processId: r.users.process_id, 
-            referralId: r.users.referral_id 
+          user: r.users ? {
+            fullName: r.users.full_name,
+            email: r.users.email,
+            processId: r.users.process_id,
+            referralId: r.users.referral_id
           } : undefined,
           app: r.app_catalog ? { appName: r.app_catalog.app_name, amount: r.amount } : undefined,
         };
       }
-      
+
       const updatePayload: Record<string, any> = {};
       if (status !== undefined) updatePayload.status = status;
       if (adminNotes !== undefined) updatePayload.admin_notes = adminNotes;
@@ -619,25 +684,25 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       // Check available balance before allowing payout
       const summary = await apiFetch('/income/summary');
       console.log('[DEBUG] Payout summary:', summary);
-      
+
       const balance = summary.data?.lifetime?.availableBalance ?? summary.lifetime?.availableBalance ?? summary.data?.data?.lifetime?.availableBalance ?? 0;
-      
+
       // Calculate total pending/processing payout requests to prevent double spending
       const { data: pendingPayouts, error: pendingErr } = await supabase
         .from('payouts')
         .select('amount')
         .eq('user_id', user.id)
         .in('status', ['pending', 'processing']);
-      
+
       if (pendingErr) throw pendingErr;
-      
+
       const pendingAmount = pendingPayouts?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
       const withdrawableBalance = balance - pendingAmount;
 
       if (amount > balance) {
         throw new Error(`Insufficient balance. Available: ₹${balance}`);
       }
-      
+
       if (amount > withdrawableBalance) {
         throw new Error(`Insufficient balance. You have pending/processing payout requests of ₹${pendingAmount}. Maximum withdrawable balance is ₹${withdrawableBalance}`);
       }
@@ -683,7 +748,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     if (method === 'PUT') {
       const { status, adminNotes } = body;
       const { data: payout } = await supabase.from('payouts').select('*').eq('id', id).single();
-      
+
       const { data, error } = await supabase
         .from('payouts')
         .update({ status, admin_notes: adminNotes })
@@ -715,6 +780,121 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       }
 
       await logAuditAction('PROCESS_PAYOUT', `Payout request ID ${id} set to ${status}`);
+      return data;
+    }
+  }
+
+  // 5b. Passive Payouts Endpoints
+  if (path === '/passive-payouts' || path.startsWith('/passive-payouts?')) {
+    if (method === 'GET') {
+      const queryStr = path.includes('?') ? path.split('?')[1] : '';
+      const params = new URLSearchParams(queryStr);
+      const userIdFilter = params.get('userId');
+
+      let query = supabase
+        .from('passive_payouts')
+        .select('*, users(full_name, email)')
+        .order('created_at', { ascending: false });
+
+      if (userIdFilter) {
+        query = query.eq('user_id', userIdFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const mapped = data.map((p: any) => ({
+        id: p.id,
+        userId: p.user_id,
+        amount: p.amount,
+        method: p.method,
+        status: p.status,
+        accountNumber: p.account_number,
+        ifscCode: p.ifsc_code,
+        accountHolderName: p.account_holder_name,
+        branchName: p.branch_name,
+        upiId: p.upi_id,
+        upiName: p.upi_name,
+        adminNotes: p.admin_notes,
+        createdAt: p.created_at,
+        user: p.users ? { fullName: p.users.full_name, email: p.users.email } : undefined,
+      }));
+      return { data: mapped };
+    }
+    if (method === 'POST') {
+      const { amount, method: payMethod, bankDetails, upiDetails } = body;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Check available passive balance
+      const passiveSummary = await apiFetch('/income/passive');
+      const balance = passiveSummary.totalPassive || 0;
+      
+      const { data: pendingPayouts, error: pendingErr } = await supabase
+        .from('passive_payouts')
+        .select('amount')
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'processing']);
+      
+      if (pendingErr) throw pendingErr;
+      
+      const pendingAmount = pendingPayouts?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+      const withdrawableBalance = balance; // balance already subtracts all requested payouts now
+
+      if (amount > withdrawableBalance) {
+        throw new Error(`Insufficient passive balance. Maximum withdrawable is ₹${withdrawableBalance}`);
+      }
+
+      const insertPayload: Record<string, any> = {
+        user_id: user.id,
+        amount,
+        method: payMethod,
+        status: 'pending',
+      };
+
+      if (payMethod === 'bank') {
+        const accountNumber = bankDetails?.accountNumber || body.accountNumber;
+        const ifscCode = bankDetails?.ifscCode || body.ifscCode;
+        const accountHolderName = bankDetails?.accountHolderName || body.accountHolderName;
+        const branchName = bankDetails?.branchName || body.branchName;
+
+        insertPayload.account_number = accountNumber;
+        insertPayload.ifsc_code = ifscCode;
+        insertPayload.account_holder_name = accountHolderName;
+        insertPayload.branch_name = branchName;
+      } else {
+        const upiId = upiDetails?.upiId || body.upiId;
+        const upiName = upiDetails?.upiName || body.upiName;
+
+        insertPayload.upi_id = upiId;
+        insertPayload.upi_name = upiName;
+      }
+
+      const { data, error } = await supabase
+        .from('passive_payouts')
+        .insert(insertPayload)
+        .select()
+        .single();
+      if (error) throw error;
+
+      return data;
+    }
+  }
+
+  if (path.startsWith('/passive-payouts/')) {
+    const id = path.split('/')[2];
+    if (method === 'PUT') {
+      const { status, adminNotes } = body;
+      
+      const { data, error } = await supabase
+        .from('passive_payouts')
+        .update({ status, admin_notes: adminNotes })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      await logAuditAction('PROCESS_PASSIVE_PAYOUT', `Passive Payout request ID ${id} set to ${status}`);
       return data;
     }
   }
@@ -774,12 +954,75 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     }
   }
 
-  // 7. Leaderboard Endpoints
-  if (path === '/leaderboard') {
+  // 6b. Q&A Videos Endpoints
+  if (path === '/qnas') {
     if (method === 'GET') {
       const { data, error } = await supabase
+        .from('qna_videos')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      const mapped = data.map((t) => ({
+        id: t.id,
+        title: t.title,
+        youtubeUrl: t.youtube_url,
+        status: t.status,
+        sortOrder: t.sort_order,
+      }));
+      return { data: mapped };
+    }
+    if (method === 'POST') {
+      const { title, youtubeUrl, status, sortOrder } = body;
+      const { data, error } = await supabase
+        .from('qna_videos')
+        .insert({ title, youtube_url: youtubeUrl, status, sort_order: sortOrder || 0 })
+        .select()
+        .single();
+      if (error) throw error;
+
+      await logAuditAction('CREATE_QNA', `Created Q&A video: ${title}`);
+      return data;
+    }
+  }
+
+  if (path.startsWith('/qnas/')) {
+    const id = path.split('/')[2];
+    if (method === 'PUT') {
+      const { title, youtubeUrl, status, sortOrder } = body;
+      const { data, error } = await supabase
+        .from('qna_videos')
+        .update({ title, youtube_url: youtubeUrl, status, sort_order: sortOrder })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      await logAuditAction('UPDATE_QNA', `Updated Q&A video: ${title}`);
+      return data;
+    }
+    if (method === 'DELETE') {
+      const { error } = await supabase.from('qna_videos').delete().eq('id', id);
+      if (error) throw error;
+
+      await logAuditAction('DELETE_QNA', `Deleted Q&A video ID: ${id}`);
+      return { success: true };
+    }
+  }
+
+  if (path === '/leaderboard') {
+    if (method === 'GET') {
+      const { data: latestDateData } = await supabase
         .from('leaderboard_entries')
-        .select('*, users(full_name, email)')
+        .select('date_label')
+        .order('date_label', { ascending: false })
+        .limit(1);
+
+      const latestDate = latestDateData?.[0]?.date_label || new Date().toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('leaderboard_entries')
+        .select('*, users(full_name, email, profile_photo)')
+        .eq('date_label', latestDate)
         .order('rank', { ascending: true });
       if (error) throw error;
       const mapped = data.map((l: any) => ({
@@ -792,6 +1035,13 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         period: l.period,
         dateLabel: l.date_label,
         isOverridden: l.is_overridden,
+        user: l.users ? {
+          fullName: l.users.full_name,
+          profilePhoto: l.users.profile_photo || '',
+        } : {
+          fullName: 'System User',
+          profilePhoto: '',
+        }
       }));
       return { data: mapped };
     }
@@ -811,6 +1061,61 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         .single();
       if (error) throw error;
       return data;
+    }
+  }
+
+  if (path === '/leaderboard/all-time') {
+    if (method === 'GET') {
+      const { data, error } = await supabase
+        .from('all_time_leaderboard')
+        .select('*')
+        .order('earnings', { ascending: false });
+      if (error) throw error;
+      return {
+        data: data.map((l: any) => ({
+          userId: l.user_id,
+          earnings: parseFloat(l.earnings || '0'),
+          fullName: l.full_name || 'System User',
+          profilePhoto: l.profile_photo || ''
+        }))
+      };
+    }
+  }
+
+  if (path.startsWith('/leaderboard/monthly')) {
+    if (method === 'GET') {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const month = params.get('month');
+      
+      let query = supabase
+        .from('monthly_leaderboard')
+        .select('*')
+        .order('earnings', { ascending: false });
+        
+      if (month) {
+        query = query.eq('month_label', month);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      const { data: monthsData } = await supabase
+        .from('monthly_leaderboard')
+        .select('month_label')
+        .order('month_label', { ascending: false });
+        
+      const uniqueMonths = Array.from(new Set(monthsData?.map((m: any) => m.month_label) || []));
+      
+      return {
+        data: data.map((l: any) => ({
+          userId: l.user_id,
+          earnings: parseFloat(l.earnings || '0'),
+          monthLabel: l.month_label,
+          fullName: l.full_name || 'System User',
+          profilePhoto: l.profile_photo || ''
+        })),
+        months: uniqueMonths
+      };
     }
   }
 
@@ -1056,7 +1361,14 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       .order('created_at', { ascending: false });
     if (error) throw error;
 
-    const totalPassive = data.reduce((sum: number, t: any) => sum + parseFloat(t.commission_amount || '0'), 0);
+    const { data: payouts } = await supabase
+      .from('passive_payouts')
+      .select('amount')
+      .eq('user_id', user.id)
+      .neq('status', 'rejected');
+      
+    const totalWithdrawn = payouts?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+    const totalPassive = data.reduce((sum: number, t: any) => sum + parseFloat(t.commission_amount || '0'), 0) - totalWithdrawn;
 
     return {
       data: data.map((t: any) => {
@@ -1193,6 +1505,75 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       createdAt: a.created_at,
     }));
     return { data: mapped };
+  }
+
+  // 14-A. Admin Stats Endpoint — accurate counts directly from DB (no pagination)
+  if (path === '/admin/stats') {
+    // Total users (excluding admins for "customer" count)
+    const { count: totalUsers } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: totalCustomers } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'customer');
+
+    const { count: activeUsers } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .eq('role', 'customer');
+
+    // Reports
+    const { count: totalReports } = await supabase
+      .from('reports')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: pendingReports } = await supabase
+      .from('reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    const { count: doneReports } = await supabase
+      .from('reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'done');
+
+    // Payouts
+    const { count: totalPayouts } = await supabase
+      .from('payouts')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: pendingPayouts } = await supabase
+      .from('payouts')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    // Apps
+    const { count: activeApps } = await supabase
+      .from('app_catalog')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
+
+    const { count: totalApps } = await supabase
+      .from('app_catalog')
+      .select('*', { count: 'exact', head: true });
+
+    return {
+      data: {
+        totalUsers: totalUsers ?? 0,
+        totalCustomers: totalCustomers ?? 0,
+        activeUsers: activeUsers ?? 0,
+        totalReports: totalReports ?? 0,
+        pendingReports: pendingReports ?? 0,
+        doneReports: doneReports ?? 0,
+        totalPayouts: totalPayouts ?? 0,
+        pendingPayouts: pendingPayouts ?? 0,
+        activeApps: activeApps ?? 0,
+        totalApps: totalApps ?? 0,
+      },
+    };
   }
 
   // 14. Admin Users Management Endpoints

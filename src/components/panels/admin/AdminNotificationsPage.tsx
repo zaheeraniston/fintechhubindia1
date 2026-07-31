@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Bell, Send, Trash2, Megaphone } from 'lucide-react';
+import { Bell, Send, Trash2, Megaphone, Pencil, X } from 'lucide-react';
 
 interface BroadcastItem {
   id: string;
@@ -24,6 +24,7 @@ export function AdminNotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = create mode
 
   // Form states
   const [title, setTitle] = useState('');
@@ -37,8 +38,7 @@ export function AdminNotificationsPage() {
   async function fetchBroadcasts() {
     setLoading(true);
     try {
-      const data = await apiFetch('/notifications?userId=00000000-0000-0000-0000-000000000000'); // Send dummy/ignored UUID but retrieve all broadcasts (user_id is null)
-      // Filter only broadcast notifications (where userId is null)
+      const data = await apiFetch('/notifications?userId=00000000-0000-0000-0000-000000000000');
       const list = data.data || [];
       const filtered = list.filter((n: any) => n.userId === null);
       setBroadcasts(filtered);
@@ -47,6 +47,21 @@ export function AdminNotificationsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleStartEdit(b: BroadcastItem) {
+    setEditingId(b.id);
+    setTitle(b.title);
+    setMessage(b.message);
+    setType(b.type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setTitle('');
+    setMessage('');
+    setType('info');
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -58,17 +73,41 @@ export function AdminNotificationsPage() {
 
     setSubmitting(true);
     try {
-      await apiFetch('/notifications/send-broadcast', {
-        method: 'POST',
-        body: JSON.stringify({ title: title.trim(), message: message.trim(), type }),
-      });
-      toast.success('Announcement broadcasted successfully!');
+      if (editingId) {
+        // ── EDIT MODE ──
+        await apiFetch(`/notifications/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ title: title.trim(), message: message.trim(), type }),
+        });
+        toast.success('Broadcast updated successfully!');
+        setBroadcasts(prev =>
+          prev.map(b =>
+            b.id === editingId
+              ? { ...b, title: title.trim(), message: message.trim(), type: type as BroadcastItem['type'] }
+              : b
+          )
+        );
+        setEditingId(null);
+      } else {
+        // ── CREATE MODE ──
+        await apiFetch('/notifications/send-broadcast', {
+          method: 'POST',
+          body: JSON.stringify({ title: title.trim(), message: message.trim(), type }),
+        });
+        toast.success('Announcement broadcasted successfully!');
+        fetchBroadcasts();
+      }
       setTitle('');
       setMessage('');
       setType('info');
-      fetchBroadcasts();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to broadcast announcement');
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : editingId
+          ? 'Failed to update announcement'
+          : 'Failed to broadcast announcement'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -78,12 +117,11 @@ export function AdminNotificationsPage() {
     if (!confirm('Are you sure you want to delete this broadcast notification?')) return;
     setDeletingId(id);
     try {
-      await apiFetch(`/notifications?id=${id}`, {
-        method: 'DELETE',
-      });
+      await apiFetch(`/notifications?id=${id}`, { method: 'DELETE' });
       toast.success('Broadcast notification deleted');
       setBroadcasts(prev => prev.filter((b) => b.id !== id));
-    } catch (err) {
+      if (editingId === id) handleCancelEdit();
+    } catch {
       toast.error('Failed to delete notification');
     } finally {
       setDeletingId(null);
@@ -105,12 +143,49 @@ export function AdminNotificationsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Form Column */}
-        <Card className="lg:col-span-1 border border-violet-500/20 shadow-2xl bg-violet-950/10 backdrop-blur-xl rounded-2xl overflow-hidden self-start">
-          <div className="h-0.5 w-full bg-gradient-to-r from-violet-500 to-fuchsia-500" />
+        <Card
+          className={`lg:col-span-1 border shadow-2xl backdrop-blur-xl rounded-2xl overflow-hidden self-start transition-all duration-300 ${
+            editingId ? 'border-amber-500/40 bg-amber-950/10' : 'border-violet-500/20 bg-violet-950/10'
+          }`}
+        >
+          <div
+            className={`h-0.5 w-full bg-gradient-to-r ${
+              editingId ? 'from-amber-500 to-orange-500' : 'from-violet-500 to-fuchsia-500'
+            }`}
+          />
           <CardContent className="p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Megaphone className="w-4 h-4 text-fuchsia-400" /> Write Announcement
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2
+                className={`text-sm font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                  editingId ? 'text-amber-300' : 'text-white'
+                }`}
+              >
+                {editingId ? (
+                  <>
+                    <Pencil className="w-4 h-4 text-amber-400" /> Edit Announcement
+                  </>
+                ) : (
+                  <>
+                    <Megaphone className="w-4 h-4 text-fuchsia-400" /> Write Announcement
+                  </>
+                )}
+              </h2>
+              {editingId && (
+                <button
+                  onClick={handleCancelEdit}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/10"
+                  title="Cancel edit"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {editingId && (
+              <div className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                ✏️ Editing existing broadcast — changes will sync instantly to user panels.
+              </div>
+            )}
 
             <form onSubmit={handleSend} className="space-y-4">
               <div className="space-y-1.5">
@@ -131,10 +206,18 @@ export function AdminNotificationsPage() {
                     <SelectValue placeholder="Choose category..." />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
-                    <SelectItem value="info" className="focus:bg-violet-600 focus:text-white">Info (Blue)</SelectItem>
-                    <SelectItem value="success" className="focus:bg-emerald-600 focus:text-white">Success (Green)</SelectItem>
-                    <SelectItem value="warning" className="focus:bg-amber-600 focus:text-white">Warning (Yellow)</SelectItem>
-                    <SelectItem value="error" className="focus:bg-rose-600 focus:text-white">Alert/Danger (Red)</SelectItem>
+                    <SelectItem value="info" className="focus:bg-violet-600 focus:text-white">
+                      Info (Blue)
+                    </SelectItem>
+                    <SelectItem value="success" className="focus:bg-emerald-600 focus:text-white">
+                      Success (Green)
+                    </SelectItem>
+                    <SelectItem value="warning" className="focus:bg-amber-600 focus:text-white">
+                      Warning (Yellow)
+                    </SelectItem>
+                    <SelectItem value="error" className="focus:bg-rose-600 focus:text-white">
+                      Alert/Danger (Red)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -151,19 +234,39 @@ export function AdminNotificationsPage() {
                 />
               </div>
 
-              <Button
-                type="submit"
-                disabled={submitting}
-                className="w-full h-11 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-bold cursor-pointer rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" /> Send Announcement
-                  </>
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className={`w-full h-11 text-white font-bold cursor-pointer rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center gap-2 ${
+                    editingId
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'
+                      : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600'
+                  }`}
+                >
+                  {submitting ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : editingId ? (
+                    <>
+                      <Pencil className="w-4 h-4" /> Update Announcement
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" /> Send Announcement
+                    </>
+                  )}
+                </Button>
+                {editingId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleCancelEdit}
+                    className="w-full h-9 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl cursor-pointer text-sm"
+                  >
+                    Cancel Edit
+                  </Button>
                 )}
-              </Button>
+              </div>
             </form>
           </CardContent>
         </Card>
@@ -192,23 +295,37 @@ export function AdminNotificationsPage() {
                       <th className="p-3 text-xs font-bold text-violet-300 uppercase tracking-wider">Announcement</th>
                       <th className="p-3 text-xs font-bold text-violet-300 uppercase tracking-wider">Type</th>
                       <th className="p-3 text-xs font-bold text-violet-300 uppercase tracking-wider">Date</th>
-                      <th className="p-3 text-xs font-bold text-violet-300 uppercase tracking-wider text-right">Delete</th>
+                      <th className="p-3 text-xs font-bold text-violet-300 uppercase tracking-wider text-right">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {broadcasts.map((b) => (
-                      <tr key={b.id} className="border-b border-white/5 hover:bg-violet-500/5 transition-colors">
-                        <td className="p-3 max-w-[240px]">
+                      <tr
+                        key={b.id}
+                        className={`border-b border-white/5 transition-colors ${
+                          editingId === b.id
+                            ? 'bg-amber-500/10 border-amber-500/20'
+                            : 'hover:bg-violet-500/5'
+                        }`}
+                      >
+                        <td className="p-3 max-w-[200px]">
                           <p className="font-semibold text-sm text-white truncate">{b.title}</p>
                           <p className="text-xs text-slate-400 truncate mt-0.5">{b.message}</p>
                         </td>
                         <td className="p-3 text-xs">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                            b.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' :
-                            b.type === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' :
-                            b.type === 'warning' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' :
-                            'bg-blue-500/10 border-blue-500/30 text-blue-300'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
+                              b.type === 'success'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : b.type === 'error'
+                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                                : b.type === 'warning'
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+                            }`}
+                          >
                             {b.type}
                           </span>
                         </td>
@@ -216,19 +333,43 @@ export function AdminNotificationsPage() {
                           {new Date(b.createdAt).toLocaleDateString('en-IN')}
                         </td>
                         <td className="p-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={deletingId === b.id}
-                            onClick={() => handleDelete(b.id)}
-                            className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
-                          >
-                            {deletingId === b.id ? (
-                              <span className="w-3.5 h-3.5 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Edit Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                editingId === b.id ? handleCancelEdit() : handleStartEdit(b)
+                              }
+                              className={`h-8 w-8 p-0 rounded-lg cursor-pointer transition-all ${
+                                editingId === b.id
+                                  ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+                                  : 'text-slate-400 hover:text-amber-400 hover:bg-amber-500/10'
+                              }`}
+                              title={editingId === b.id ? 'Cancel edit' : 'Edit broadcast'}
+                            >
+                              {editingId === b.id ? (
+                                <X className="w-4 h-4" />
+                              ) : (
+                                <Pencil className="w-4 h-4" />
+                              )}
+                            </Button>
+                            {/* Delete Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deletingId === b.id}
+                              onClick={() => handleDelete(b.id)}
+                              className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
+                              title="Delete broadcast"
+                            >
+                              {deletingId === b.id ? (
+                                <span className="w-3.5 h-3.5 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

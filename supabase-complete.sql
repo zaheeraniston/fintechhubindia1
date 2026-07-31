@@ -52,7 +52,7 @@ DROP TYPE IF EXISTS public.leaderboard_period CASCADE;
 -- 3. Custom Types (Enums)
 CREATE TYPE public.user_role AS ENUM ('admin', 'customer');
 CREATE TYPE public.user_status AS ENUM ('active', 'terminated', 'suspended');
-CREATE TYPE public.report_status AS ENUM ('pending', 'accepted', 'rejected', 'trade_pending', 'trade_completed', 'done');
+CREATE TYPE public.report_status AS ENUM ('pending', 'accepted', 'rejected', 'trade_pending', 'trade_completed', 'done', 'lead_received', 'payment_clex', 'no_lead_check_clint_info');
 CREATE TYPE public.payout_status AS ENUM ('pending', 'processing', 'completed', 'rejected');
 CREATE TYPE public.payout_method AS ENUM ('bank', 'upi');
 CREATE TYPE public.ledger_type AS ENUM ('credit', 'debit');
@@ -585,92 +585,127 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.get_income_summary(p_user_id UUID)
 RETURNS JSON AS $$
 DECLARE
-  daily_report_credits DECIMAL := 0;
-  daily_passive_credits DECIMAL := 0;
-  daily_credits DECIMAL := 0;
-  daily_debits DECIMAL := 0;
-  
+  -- Report income (income_ledger only)
+  daily_report_credits   DECIMAL := 0;
   monthly_report_credits DECIMAL := 0;
-  monthly_passive_credits DECIMAL := 0;
-  monthly_credits DECIMAL := 0;
-  monthly_debits DECIMAL := 0;
-  
   lifetime_report_credits DECIMAL := 0;
-  lifetime_passive_credits DECIMAL := 0;
-  lifetime_credits DECIMAL := 0;
+  
+  -- Debits (income_ledger)
+  daily_debits    DECIMAL := 0;
+  monthly_debits  DECIMAL := 0;
   lifetime_debits DECIMAL := 0;
+  
+  -- Available balance = report income - debits (NEVER includes passive)
   available_balance DECIMAL := 0;
   
-  self_credits DECIMAL := 0;
+  -- Passive income breakdown (passive_income_transactions only)
   passive_lvl1_credits DECIMAL := 0;
   passive_lvl2_credits DECIMAL := 0;
-  total_passive DECIMAL := 0;
+  total_passive        DECIMAL := 0;
+  
+  -- Daily/Monthly passive (for separate display)
+  daily_passive_credits   DECIMAL := 0;
+  monthly_passive_credits DECIMAL := 0;
 BEGIN
+  -- ── DAILY: Report credits only (income_ledger) ──
   SELECT COALESCE(SUM(amount), 0) INTO daily_report_credits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'credit' 
-    AND created_at >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date;
-    
-  SELECT COALESCE(SUM(commission_amount), 0) INTO daily_passive_credits
-    FROM public.passive_income_transactions WHERE beneficiary_user_id = p_user_id 
-    AND transaction_type IN ('PASSIVE_LEVEL_1', 'PASSIVE_LEVEL_2')
-    AND created_at >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date;
-    
-  daily_credits := daily_report_credits + daily_passive_credits;
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'credit'
+      AND created_at >= ((NOW() AT TIME ZONE 'Asia/Kolkata')::date)::timestamp AT TIME ZONE 'Asia/Kolkata';
+
+  -- ── DAILY: Debits ──
   SELECT COALESCE(SUM(amount), 0) INTO daily_debits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'debit' 
-    AND created_at >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date;
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'debit'
+      AND created_at >= ((NOW() AT TIME ZONE 'Asia/Kolkata')::date)::timestamp AT TIME ZONE 'Asia/Kolkata';
+
+  -- ── DAILY: Passive credits (separate, for reference only) ──
+  SELECT COALESCE(SUM(commission_amount), 0) INTO daily_passive_credits
+    FROM public.passive_income_transactions
+    WHERE beneficiary_user_id = p_user_id
+      AND transaction_type IN ('PASSIVE_LEVEL_1', 'PASSIVE_LEVEL_2')
+      AND created_at >= ((NOW() AT TIME ZONE 'Asia/Kolkata')::date)::timestamp AT TIME ZONE 'Asia/Kolkata';
+
+  -- ── MONTHLY: Report credits only (income_ledger) ──
   SELECT COALESCE(SUM(amount), 0) INTO monthly_report_credits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'credit' 
-    AND created_at >= NOW() - INTERVAL '30 days';
-    
-  SELECT COALESCE(SUM(commission_amount), 0) INTO monthly_passive_credits
-    FROM public.passive_income_transactions WHERE beneficiary_user_id = p_user_id 
-    AND transaction_type IN ('PASSIVE_LEVEL_1', 'PASSIVE_LEVEL_2')
-    AND created_at >= NOW() - INTERVAL '30 days';
-    
-  monthly_credits := monthly_report_credits + monthly_passive_credits;
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'credit'
+      AND created_at >= NOW() - INTERVAL '30 days';
+
+  -- ── MONTHLY: Debits ──
   SELECT COALESCE(SUM(amount), 0) INTO monthly_debits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'debit' 
-    AND created_at >= NOW() - INTERVAL '30 days';
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'debit'
+      AND created_at >= NOW() - INTERVAL '30 days';
+
+  -- ── MONTHLY: Passive (separate, for reference only) ──
+  SELECT COALESCE(SUM(commission_amount), 0) INTO monthly_passive_credits
+    FROM public.passive_income_transactions
+    WHERE beneficiary_user_id = p_user_id
+      AND transaction_type IN ('PASSIVE_LEVEL_1', 'PASSIVE_LEVEL_2')
+      AND created_at >= NOW() - INTERVAL '30 days';
+
+  -- ── LIFETIME: Report credits only (income_ledger) ──
   SELECT COALESCE(SUM(amount), 0) INTO lifetime_report_credits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'credit';
-    
-  SELECT COALESCE(SUM(commission_amount), 0) INTO lifetime_passive_credits
-    FROM public.passive_income_transactions WHERE beneficiary_user_id = p_user_id 
-    AND transaction_type IN ('PASSIVE_LEVEL_1', 'PASSIVE_LEVEL_2');
-    
-  lifetime_credits := lifetime_report_credits + lifetime_passive_credits;
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'credit';
+
+  -- ── LIFETIME: Debits ──
   SELECT COALESCE(SUM(amount), 0) INTO lifetime_debits
-    FROM public.income_ledger WHERE user_id = p_user_id AND type = 'debit';
-  
-  available_balance := lifetime_credits - lifetime_debits;
-  
-  self_credits := lifetime_report_credits;
-  
+    FROM public.income_ledger
+    WHERE user_id = p_user_id
+      AND type = 'debit';
+
+  -- ── Available balance = ONLY report income minus withdrawals ──
+  -- Passive income is COMPLETELY SEPARATE - not included here
+  available_balance := lifetime_report_credits - lifetime_debits;
+
+  -- ── Passive breakdown (from passive_income_transactions ONLY) ──
   SELECT COALESCE(SUM(commission_amount), 0) INTO passive_lvl1_credits
-    FROM public.passive_income_transactions 
-    WHERE beneficiary_user_id = p_user_id AND transaction_type = 'PASSIVE_LEVEL_1';
-    
+    FROM public.passive_income_transactions
+    WHERE beneficiary_user_id = p_user_id
+      AND transaction_type = 'PASSIVE_LEVEL_1';
+
   SELECT COALESCE(SUM(commission_amount), 0) INTO passive_lvl2_credits
-    FROM public.passive_income_transactions 
-    WHERE beneficiary_user_id = p_user_id AND transaction_type = 'PASSIVE_LEVEL_2';
-    
+    FROM public.passive_income_transactions
+    WHERE beneficiary_user_id = p_user_id
+      AND transaction_type = 'PASSIVE_LEVEL_2';
+
   total_passive := passive_lvl1_credits + passive_lvl2_credits;
-  
+
   RETURN json_build_object(
-    'daily', json_build_object('credits', daily_credits, 'debits', daily_debits, 'net', daily_credits),
-    'monthly', json_build_object('credits', monthly_credits, 'debits', monthly_debits, 'net', monthly_credits),
-    'lifetime', json_build_object('credits', lifetime_credits, 'debits', lifetime_debits, 'net', lifetime_credits, 'availableBalance', available_balance),
+    -- daily: ONLY report income (no passive mixed in)
+    'daily', json_build_object(
+      'credits',       daily_report_credits,
+      'debits',        daily_debits,
+      'net',           daily_report_credits,
+      'passiveCredits', daily_passive_credits
+    ),
+    -- monthly: ONLY report income (no passive mixed in)
+    'monthly', json_build_object(
+      'credits',       monthly_report_credits,
+      'debits',        monthly_debits,
+      'net',           monthly_report_credits,
+      'passiveCredits', monthly_passive_credits
+    ),
+    -- lifetime: ONLY report income; availableBalance excludes passive
+    'lifetime', json_build_object(
+      'credits',          lifetime_report_credits,
+      'debits',           lifetime_debits,
+      'net',              lifetime_report_credits,
+      'availableBalance', available_balance
+    ),
+    -- breakdown: self = report income, passive = passive_income_transactions
     'breakdown', json_build_object(
-      'self', self_credits,
-      'direct', passive_lvl1_credits,
-      'level2', passive_lvl2_credits,
-      'level3', 0,
+      'self',    lifetime_report_credits,
+      'direct',  passive_lvl1_credits,
+      'level2',  passive_lvl2_credits,
+      'level3',  0,
       'passive', total_passive
     )
   );

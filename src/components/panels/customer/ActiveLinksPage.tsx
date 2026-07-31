@@ -6,13 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner, EmptyState } from '@/components/shared/LoadingStates';
 import { toast } from 'sonner';
-import { ExternalLink, Link2 } from 'lucide-react';
+import { ExternalLink, Link2, Copy, Share2 } from 'lucide-react';
 
 interface LinkItem {
   id: string;
   appName: string;
   link: string;
   status: string;
+  logoUrl?: string;
 }
 
 export function ActiveLinksPage() {
@@ -32,6 +33,33 @@ export function ActiveLinksPage() {
     }
     fetchLinks();
   }, []);
+
+  const handleCopy = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('Link copied to clipboard!');
+    } catch (err) {
+      toast.error('Failed to copy link');
+    }
+  };
+
+  const handleShare = async (item: LinkItem) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: item.appName,
+          text: `Check out the referral link for ${item.appName}!`,
+          url: item.link,
+        });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          toast.error('Failed to share link');
+        }
+      }
+    } else {
+      handleCopy(item.link);
+    }
+  };
 
   if (loading) return <LoadingSpinner text="Loading links..." />;
 
@@ -64,8 +92,12 @@ export function ActiveLinksPage() {
               <div className={`bg-gradient-to-r ${colors[i % colors.length]} p-4`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Link2 className="w-6 h-6 text-white" />
+                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
+                      {item.logoUrl ? (
+                        <img src={item.logoUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Link2 className="w-6 h-6 text-white" />
+                      )}
                     </div>
                     <div>
                       <h3 className="text-white font-bold text-lg">{item.appName}</h3>
@@ -74,13 +106,31 @@ export function ActiveLinksPage() {
                   </div>
                 </div>
               </div>
-              <div className="p-4">
-                <a href={item.link} target="_blank" rel="noopener noreferrer">
+              <div className="p-4 flex flex-col gap-2">
+                <a href={item.link} target="_blank" rel="noopener noreferrer" className="w-full">
                   <Button className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-bold shadow-lg shadow-violet-500/25 transition-all duration-300 rounded-xl cursor-pointer hover:scale-[1.01] active:scale-[0.99]">
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Visit {item.appName}
                   </Button>
                 </a>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleCopy(item.link)}
+                    variant="outline"
+                    className="flex-1 h-10 border-white/10 hover:border-violet-500/50 text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all duration-300 flex items-center justify-center cursor-pointer"
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy
+                  </Button>
+                  <Button
+                    onClick={() => handleShare(item)}
+                    variant="outline"
+                    className="flex-1 h-10 border-white/10 hover:border-violet-500/50 text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all duration-300 flex items-center justify-center cursor-pointer"
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { subscribeToPush } from '@/lib/push';
+import { silentSubscribeIfGranted } from '@/lib/push';
 import { Toaster } from '@/components/ui/sonner';
 import { useSettingsStore } from '@/stores/settings-store';
 import { FullScreenLoader } from '@/components/shared/LoadingStates';
 
-// Shared Components
 import { LandingPage } from '@/components/panels/LandingPage';
+import { WelcomeCelebration } from '@/components/panels/WelcomeCelebration';
+import { HostingTimeoutPage } from '@/components/panels/HostingTimeoutPage';
+
+// 🚨 HOSTING TIMEOUT CONTROL FLAG
+// Set to true: Shows ONLY the Error 404 / Hosting Timeout page to all visitors
+// Set to false: Instantly restores full website without any other changes
+const SHOW_HOSTING_TIMEOUT_PAGE = true;
 
 // Auth Pages
 import { LoginPage } from '@/components/panels/LoginPage';
@@ -22,6 +28,7 @@ import { SubmitReportPage } from '@/components/panels/customer/SubmitReportPage'
 import { ReportStatusPage } from '@/components/panels/customer/ReportStatusPage';
 import { PayoutPage } from '@/components/panels/customer/PayoutPage';
 import { TrainingsPage } from '@/components/panels/customer/TrainingsPage';
+import { QnasPage } from '@/components/panels/customer/QnasPage';
 import { LeaderboardPage } from '@/components/panels/customer/LeaderboardPage';
 import { SeasonsPage } from '@/components/panels/customer/SeasonsPage';
 import { CustomerCarePage } from '@/components/panels/customer/CustomerCarePage';
@@ -39,21 +46,28 @@ import { AdminAppsPage } from '@/components/panels/admin/AdminAppsPage';
 import { AdminLinksPage } from '@/components/panels/admin/AdminLinksPage';
 import { AdminPayoutsPage } from '@/components/panels/admin/AdminPayoutsPage';
 import { AdminTrainingsPage } from '@/components/panels/admin/AdminTrainingsPage';
+import { AdminQnasPage } from '@/components/panels/admin/AdminQnasPage';
 import { AdminLeaderboardPage } from '@/components/panels/admin/AdminLeaderboardPage';
 import { AdminSeasonsPage } from '@/components/panels/admin/AdminSeasonsPage';
 import { AdminSettingsPage } from '@/components/panels/admin/AdminSettingsPage';
 import { AdminAuditPage } from '@/components/panels/admin/AdminAuditPage';
 import { AdminNotificationsPage } from '@/components/panels/admin/AdminNotificationsPage';
 import { AdminPassivePayoutsPage } from '@/components/panels/admin/AdminPassivePayoutsPage';
+import { AdminPassiveWithdrawalsPage } from '@/components/panels/admin/AdminPassiveWithdrawalsPage';
 
 export default function App() {
-  const { currentPage, user, setUser, setPage, triggerRefresh } = useAppStore();
+  if (SHOW_HOSTING_TIMEOUT_PAGE) {
+    return <HostingTimeoutPage />;
+  }
+
+  const { currentPage, user, setUser, setPage, triggerRefresh, pendingCelebration, setPendingCelebration } = useAppStore();
   const [loading, setLoading] = useState(true);
 
-  // Auto-subscribe customer to Web Push after login
+  // Auto-subscribe to Web Push silently if permission already granted
+  // If not granted, user must click "Enable Notifications" button in the app
   useEffect(() => {
     if (user?.id && user.role === 'customer') {
-      subscribeToPush(user.id).catch(() => {});
+      silentSubscribeIfGranted(user.id).catch(() => { });
     }
   }, [user?.id, user?.role]);
 
@@ -130,10 +144,12 @@ export default function App() {
         const profile = await apiFetch('/auth/me');
         if (isMounted) {
           setUser(profile);
-          
-          // Re-route based on role if on login/signup/landing page
+
+          // Re-route based on role if on login/landing page
+          // NOTE: 'signup' is intentionally excluded — SignupPage handles its own
+          // post-signup navigation (celebration screen → dashboard)
           const currentPath = useAppStore.getState().currentPage;
-          if (currentPath === 'login' || currentPath === 'signup' || currentPath === 'landing') {
+          if (currentPath === 'login' || currentPath === 'landing') {
             if (profile.role === 'admin') {
               setPage('admin-dashboard');
             } else {
@@ -206,6 +222,13 @@ export default function App() {
       if (!initialCheckDone) return;
 
       if (event === 'SIGNED_IN' && session?.user) {
+        // ✅ CRITICAL: If a celebration is pending (fresh signup just completed),
+        // skip ALL auth handling. SignupPage/App will call setUser when user
+        // clicks Continue on the celebration screen.
+        const hasPendingCelebration = useAppStore.getState().pendingCelebration;
+        const onSignupPage = useAppStore.getState().currentPage === 'signup';
+        if (hasPendingCelebration || onSignupPage) return;
+
         const currentUser = useAppStore.getState().user;
         // Skip if user was already loaded by LoginPage/SignupPage (avoids double-fetch & loading spinner)
         if (currentUser && currentUser.id === session.user.id) {
@@ -233,8 +256,29 @@ export default function App() {
     };
   }, []);
 
-  if (loading) {
+  if (loading && !pendingCelebration) {
     return <FullScreenLoader />;
+  }
+
+  // ✅ CELEBRATION OVERLAY — rendered at top level so auth loading/routing cannot block it
+  // This is triggered by a successful signup before the user is routed to dashboard.
+  if (pendingCelebration) {
+    return (
+      <>
+        <WelcomeCelebration
+          userName={pendingCelebration.name}
+          email={pendingCelebration.email}
+          password={pendingCelebration.password}
+          referralId={pendingCelebration.referralId}
+          onContinue={() => {
+            setUser(pendingCelebration.userData);
+            setPendingCelebration(null);
+            setPage('dashboard');
+          }}
+        />
+        <Toaster />
+      </>
+    );
   }
 
   // 1. Auth & Landing pages (no layouts)
@@ -252,12 +296,14 @@ export default function App() {
       'admin-links': <AdminLinksPage />,
       'admin-payouts': <AdminPayoutsPage />,
       'admin-trainings': <AdminTrainingsPage />,
+      'admin-qnas': <AdminQnasPage />,
       'admin-leaderboard': <AdminLeaderboardPage />,
       'admin-seasons': <AdminSeasonsPage />,
       'admin-settings': <AdminSettingsPage />,
       'admin-audit': <AdminAuditPage />,
       'admin-notifications': <AdminNotificationsPage />,
       'admin-passive-payouts': <AdminPassivePayoutsPage />,
+      'admin-passive-withdrawals': <AdminPassiveWithdrawalsPage />,
     };
 
     return (
@@ -287,6 +333,7 @@ export default function App() {
     'report-status': <ReportStatusPage />,
     'payout': <PayoutPage />,
     'trainings': <TrainingsPage />,
+    'qnas': <QnasPage />,
     'leaderboard': <LeaderboardPage />,
     'seasons': <SeasonsPage />,
     'customer-care': <CustomerCarePage />,
@@ -305,7 +352,7 @@ export default function App() {
       <div className="glow-orb orb-purple w-[400px] h-[400px] top-[-10%] left-[-10%] animate-drift-slow" />
       <div className="glow-orb orb-fuchsia w-[400px] h-[400px] bottom-[-10%] right-[-10%] animate-drift-reverse" />
       <div className="glow-orb orb-cyan w-[300px] h-[300px] top-[40%] right-[10%]" />
-      
+
       <div className="relative z-10 flex flex-col md:flex-row min-h-screen">
         <CustomerNav />
         <div className="flex-1 flex flex-col min-h-screen overflow-y-auto">

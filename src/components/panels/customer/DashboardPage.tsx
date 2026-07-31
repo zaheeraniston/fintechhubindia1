@@ -19,59 +19,45 @@ import {
   TrendingUp,
   CalendarDays,
   Sparkles,
-  ArrowDownToLine,
+  Zap,
 } from 'lucide-react';
+import { PassiveWithdrawModal } from './PassiveWithdrawModal';
 
-/* ─── tiny inline styles for animations not in Tailwind ─── */
 const style = `
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(28px); }
-  to   { opacity: 1; transform: translateY(0);    }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes cardShimmer {
-  0%   { transform: translateX(-120%); }
-  100% { transform: translateX(120%);  }
+@keyframes shimmerCard {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(200%);  }
 }
-@keyframes floatOrb1 {
-  0%,100% { transform: translate(0px,  0px)  scale(1);    }
-  33%      { transform: translate(18px,-22px) scale(1.08); }
-  66%      { transform: translate(-12px,14px) scale(0.95); }
+@keyframes avatarGlow {
+  0%,100% { box-shadow: 0 0 0 4px rgba(139,92,246,0.5), 0 0 30px rgba(139,92,246,0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(139,92,246,0.2), 0 0 50px rgba(139,92,246,0.6); }
 }
-@keyframes floatOrb2 {
-  0%,100% { transform: translate(0px, 0px)  scale(1);    }
-  40%      { transform: translate(-20px,18px) scale(1.06); }
-  70%      { transform: translate(14px,-10px) scale(0.97); }
+@keyframes twinkle {
+  0%,100% { opacity:0.2; transform:scale(1); }
+  50%      { opacity:1;   transform:scale(1.8); }
 }
-@keyframes floatOrb3 {
-  0%,100% { transform: translate(0px, 0px); }
-  50%      { transform: translate(10px,20px); }
+.dash-card-shimmer { position:relative; overflow:hidden; }
+.dash-card-shimmer::after {
+  content:'';
+  position:absolute;
+  top:0; left:0; bottom:0;
+  width:60%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  animation: shimmerCard 3s ease-in-out infinite;
+  pointer-events:none;
 }
-@keyframes starTwinkle {
-  0%,100% { opacity: 0.15; transform: scale(1);    }
-  50%      { opacity: 0.8;  transform: scale(1.5);  }
-}
-@keyframes avatarPulseRing {
-  0%   { box-shadow: 0 0 0 0px rgba(167,139,250,0.55); }
-  70%  { box-shadow: 0 0 0 12px rgba(167,139,250,0);   }
-  100% { box-shadow: 0 0 0 0px rgba(167,139,250,0);    }
-}
-.anim-slide-0 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.05s both; }
-.anim-slide-1 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.15s both; }
-.anim-slide-2 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.25s both; }
-.anim-slide-3 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.35s both; }
-.anim-slide-4 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.45s both; }
-.anim-slide-5 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.55s both; }
-.anim-slide-6 { animation: fadeSlideUp 0.55s cubic-bezier(.22,1,.36,1) 0.65s both; }
-.earning-card { position: relative; overflow: hidden; }
-.earning-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
-  animation: cardShimmer 3.5s ease-in-out infinite;
-  pointer-events: none;
-}
-.avatar-pulse { animation: avatarPulseRing 2.4s ease-out infinite; }
+.avatar-glow-ring { animation: avatarGlow 2.5s ease-in-out infinite; }
+.s0 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.05s both; }
+.s1 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.12s both; }
+.s2 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.20s both; }
+.s3 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.28s both; }
+.s4 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.36s both; }
+.s5 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.44s both; }
+.s6 { animation: fadeSlideUp 0.5s cubic-bezier(.22,1,.36,1) 0.52s both; }
 `;
 
 interface IncomeData {
@@ -109,63 +95,34 @@ interface DownlineData {
   };
 }
 
-/* ─── Tiny floating star dot ─── */
-function Star({ x, y, delay, size }: { x: string; y: string; delay: string; size: number }) {
-  return (
-    <span
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: 'white',
-        animation: `starTwinkle 2.8s ease-in-out ${delay} infinite`,
-        pointerEvents: 'none',
-      }}
-    />
-  );
-}
-
-/* ─── Animated Earning Counter component ─── */
-function CountUpAmount({ value, duration = 1500 }: { value: number; duration?: number }) {
+function CountUpAmount({ value, duration = 1400 }: { value: number; duration?: number }) {
   const [count, setCount] = useState(0);
-
   useEffect(() => {
     let startTime: number | null = null;
     let frameId: number;
-    const startValue = 0;
-    
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
-      const progress = timestamp - startTime;
-      const progressPercentage = Math.min(progress / duration, 1);
-      
-      const easeOutQuad = (t: number) => t * (2 - t);
-      const easedProgress = easeOutQuad(progressPercentage);
-      
-      setCount(Math.floor(startValue + easedProgress * (value - startValue)));
-      if (progressPercentage < 1) {
-        frameId = requestAnimationFrame(animate);
-      }
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = progress * (2 - progress);
+      setCount(Math.floor(eased * value));
+      if (progress < 1) frameId = requestAnimationFrame(animate);
     };
-    
     frameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameId);
   }, [value, duration]);
+  return <>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(count)}</>;
+}
 
-  return (
-    <>
-      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(count)}
-    </>
-  );
+/* Small twinkling dot */
+function Dot({ style: s }: { style: React.CSSProperties }) {
+  return <span style={{ position:'absolute', borderRadius:'50%', background:'white', animation:'twinkle 3s ease-in-out infinite', ...s }} />;
 }
 
 export function DashboardPage() {
-  const { user, setPage, refreshTrigger } = useAppStore();
+  const { user, setPage, refreshTrigger, triggerRefresh } = useAppStore();
   const [income, setIncome] = useState<IncomeData | null>(null);
   const [downline, setDownline] = useState<DownlineData | null>(null);
+  const [passiveBalance, setPassiveBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showPassiveModal, setShowPassiveModal] = useState(false);
@@ -173,12 +130,14 @@ export function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [incomeRes, downlineRes] = await Promise.all([
+        const [incomeRes, downlineRes, passiveRes] = await Promise.all([
           apiFetch('/income/summary'),
-          apiFetch(`/downline?userId=${user?.id}`)
+          apiFetch(`/downline?userId=${user?.id}`),
+          apiFetch('/income/passive'),
         ]);
         setIncome(incomeRes.data);
         setDownline(downlineRes);
+        setPassiveBalance(passiveRes.totalPassive ?? 0);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -192,13 +151,19 @@ export function DashboardPage() {
     ? user.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U';
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'GOOD MORNING ☀️';
+    if (h >= 12 && h < 17) return 'GOOD AFTERNOON 🌤️';
+    if (h >= 17 && h < 22) return 'GOOD EVENING 🌇';
+    return 'GOOD NIGHT 🌙';
+  })();
 
   if (loading) {
     return (
-      <div className="p-4 sm:p-6 space-y-4 max-w-4xl mx-auto">
-        <SkeletonCard className="h-48 rounded-3xl" />
+      <div className="p-4 space-y-4 max-w-lg mx-auto">
+        <SkeletonCard className="h-10 rounded-xl" />
+        <SkeletonCard className="h-52 rounded-3xl" />
         <SkeletonCard className="h-20 rounded-2xl" />
         <SkeletonCard className="h-20 rounded-2xl" />
         <SkeletonCard className="h-20 rounded-2xl" />
@@ -209,211 +174,342 @@ export function DashboardPage() {
 
   return (
     <>
-      {/* Inject animation keyframes */}
       <style>{style}</style>
 
-      <div className="pt-0 pb-6 px-4 sm:p-6 space-y-3 sm:space-y-5 max-w-4xl mx-auto relative z-10">
+      {/* ─── TOP HERO BANNER (outside card) ─────────────────────── */}
+      {/* -mt-14 cancels the pt-14 on <main> for mobile — removes blank space above banner */}
+      <div className="-mt-14 md:mt-0 w-full text-center py-3 px-4 bg-slate-950 select-none">
+        <p className="text-[22px] sm:text-3xl font-black leading-tight tracking-tight">
+          <span className="text-white italic">DEMAT ACCOUNT WORK</span>
+          <br />
+          <span className="text-yellow-400 italic">WITHOUT INVESTMENT</span>
+        </p>
+      </div>
 
-        {/* ══════════════════════════════════════════════════════
-            1. PROFILE HERO
-            ══════════════════════════════════════════════════════ */}
-        <div className="anim-slide-0 mt-[-16px] sm:mt-0 relative rounded-3xl overflow-hidden">
+      <div className="pb-6 px-3 space-y-3 max-w-lg mx-auto relative z-10">
 
-          {/* ── Animated background ── */}
-          <div className="absolute inset-0 bg-gradient-to-b from-violet-700 via-fuchsia-700 to-slate-950" />
+        {/* ── 1. PROFILE HERO CARD ──────────────────────────────── */}
+        <div className="s0 relative rounded-3xl overflow-hidden" style={{
+          background: 'linear-gradient(160deg, #3d1a6e 0%, #1e0a4a 40%, #120630 100%)',
+          border: '1.5px solid rgba(139,92,246,0.4)',
+          boxShadow: '0 0 40px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}>
+          {/* Background star dots */}
+          <Dot style={{ width:3, height:3, top:'12%', left:'8%', animationDelay:'0s' }} />
+          <Dot style={{ width:2, height:2, top:'8%', left:'55%', animationDelay:'0.8s' }} />
+          <Dot style={{ width:3, height:3, top:'15%', right:'12%', animationDelay:'1.5s' }} />
+          <Dot style={{ width:2, height:2, top:'60%', left:'15%', animationDelay:'0.4s' }} />
+          <Dot style={{ width:2, height:2, top:'55%', right:'8%', animationDelay:'2.1s' }} />
+          <Dot style={{ width:2, height:2, top:'35%', left:'82%', animationDelay:'1.1s' }} />
 
-          {/* Floating orb 1 */}
-          <div style={{ position:'absolute', top:'10%', left:'8%', width:110, height:110,
-            background:'radial-gradient(circle, rgba(167,139,250,0.45) 0%, transparent 70%)',
-            borderRadius:'50%', filter:'blur(18px)',
-            animation:'floatOrb1 7s ease-in-out infinite' }} />
-          {/* Floating orb 2 */}
-          <div style={{ position:'absolute', top:'15%', right:'10%', width:90, height:90,
-            background:'radial-gradient(circle, rgba(232,121,249,0.45) 0%, transparent 70%)',
-            borderRadius:'50%', filter:'blur(16px)',
-            animation:'floatOrb2 9s ease-in-out infinite' }} />
-          {/* Floating orb 3 – bottom center */}
-          <div style={{ position:'absolute', bottom:'0%', left:'40%', width:140, height:60,
-            background:'radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%)',
-            borderRadius:'50%', filter:'blur(24px)',
-            animation:'floatOrb3 11s ease-in-out infinite' }} />
+          {/* Glowing bg orb behind avatar */}
+          <div style={{
+            position:'absolute', top:'0%', left:'50%', transform:'translateX(-50%)',
+            width:180, height:180,
+            background:'radial-gradient(circle, rgba(138,43,226,0.55) 0%, transparent 70%)',
+            filter:'blur(30px)',
+          }} />
 
-          {/* Star particles */}
-          <Star x="12%"  y="20%" delay="0s"    size={3} />
-          <Star x="80%"  y="12%" delay="0.6s"  size={2} />
-          <Star x="55%"  y="8%"  delay="1.2s"  size={2} />
-          <Star x="25%"  y="65%" delay="0.3s"  size={2} />
-          <Star x="88%"  y="55%" delay="1.8s"  size={3} />
-          <Star x="65%"  y="78%" delay="0.9s"  size={2} />
-          <Star x="38%"  y="40%" delay="2.1s"  size={2} />
-
-          {/* Content */}
-          <div className="relative z-10 flex flex-col items-center pt-8 pb-6 px-6 text-center">
-            {/* Avatar */}
-            <div className="relative mb-3">
-              {/* Animated glow ring behind avatar */}
-              <div className="absolute inset-0 rounded-full"
-                style={{ background:'linear-gradient(135deg,#a78bfa,#f0abfc)',
-                  filter:'blur(10px)', opacity:0.65, transform:'scale(1.18)' }} />
-              <Avatar className="relative avatar-pulse w-20 h-20 border-[3px] border-white/40 shadow-2xl">
+          {/* Top Row: Avatar LEFT + Name/Greeting RIGHT */}
+          <div className="relative z-10 flex flex-row items-center gap-4 px-4 pt-6 pb-4">
+            {/* Avatar with glowing purple ring */}
+            <div className="relative flex-shrink-0">
+              {/* Neon glow ring */}
+              <div style={{
+                position:'absolute', inset:-4, borderRadius:'50%',
+                background:'linear-gradient(135deg, #a855f7, #7c3aed)',
+                padding: 3,
+              }}>
+                <div style={{ borderRadius:'50%', width:'100%', height:'100%', background:'transparent' }} />
+              </div>
+              <Avatar
+                className="avatar-glow-ring relative w-20 h-20 border-[3px] bg-slate-900"
+                style={{ borderColor: 'transparent', borderRadius:'50%' }}
+              >
                 <AvatarImage src={user?.profilePhoto} alt={user?.fullName} />
-                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-2xl font-black">
+                <AvatarFallback style={{
+                  background: 'linear-gradient(135deg, #7c3aed, #9333ea)',
+                  color:'white', fontSize:28, fontWeight:900, borderRadius:'50%',
+                }}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
+              {/* Solid purple border ring */}
+              <div style={{
+                position:'absolute', inset:-5, borderRadius:'50%',
+                border:'3px solid rgba(168,85,247,0.8)',
+                boxShadow:'0 0 20px rgba(168,85,247,0.6)',
+              }} />
             </div>
 
-            {/* Greeting */}
-            <p className="text-white/70 text-[10px] sm:text-xs font-black uppercase tracking-wider mb-1">
-              {(() => {
-                const hour = new Date().getHours();
-                if (hour >= 5 && hour < 12) return 'Good Morning ☀️';
-                if (hour >= 12 && hour < 17) return 'Good Afternoon 🌤️';
-                if (hour >= 17 && hour < 22) return 'Good Evening 🌇';
-                return 'Good Night 🌙';
-              })()}
-            </p>
+            {/* Right side: Greeting + Name + ID */}
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+              {/* Greeting */}
+              <p style={{ color:'rgba(255,255,255,0.7)', fontSize:11, fontWeight:700, letterSpacing:'0.12em', marginBottom:2 }}>
+                {greeting}
+              </p>
 
-            {/* Name */}
-            <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-widest drop-shadow-lg leading-none mt-1">
-              {user?.fullName}
-            </h1>
+              {/* Name */}
+              <h1 style={{
+                fontSize:22, fontWeight:900, color:'white', letterSpacing:'0.08em',
+                textTransform:'uppercase', lineHeight:1.1, marginBottom:8,
+              }}>
+                {user?.fullName}
+              </h1>
 
-            {/* Process ID badge */}
-            <div className="mt-2 flex items-center gap-2 bg-white/10 border border-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
-              <Sparkles className="w-3 h-3 text-fuchsia-300" />
-              <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">ID:</span>
-              <span className="text-white text-xs font-black font-mono tracking-wider">{user?.processId}</span>
+              {/* ID Badge */}
+              <div style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)',
+                borderRadius:999, padding:'5px 14px',
+              }}>
+                <Sparkles style={{ width:13, height:13, color:'#c084fc' }} />
+                <span style={{ color:'rgba(255,255,255,0.55)', fontSize:10, fontWeight:800, letterSpacing:'0.1em', textTransform:'uppercase' }}>ID:</span>
+                <span style={{ color:'white', fontSize:12, fontWeight:900, fontFamily:'monospace', letterSpacing:'0.12em' }}>{user?.processId}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom section: Feature badges + Earn Daily pill */}
+          <div className="relative z-10 px-4 pb-5" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+            {/* Feature badges row */}
+            <div style={{ display:'flex', gap:16, justifyContent:'center', flexWrap:'wrap' }}>
+              {/* 100% SAFE */}
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                <div style={{
+                  width:36, height:36, borderRadius:'50%',
+                  border:'2px solid #eab308', display:'flex', alignItems:'center', justifyContent:'center',
+                  background:'rgba(234,179,8,0.08)',
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <polyline points="9,12 11,14 15,10"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize:9, fontWeight:800, color:'#eab308', textAlign:'center', letterSpacing:'0.04em', lineHeight:1.2 }}>
+                  100% SAFE<br/>&amp; SECURE
+                </span>
+              </div>
+              {/* NO INVESTMENT */}
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                <div style={{
+                  width:36, height:36, borderRadius:'50%',
+                  border:'2px solid #eab308', display:'flex', alignItems:'center', justifyContent:'center',
+                  background:'rgba(234,179,8,0.08)',
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20,6 9,17 4,12"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize:9, fontWeight:800, color:'#eab308', textAlign:'center', letterSpacing:'0.04em', lineHeight:1.2 }}>
+                  NO INVESTMENT<br/>REQUIRED
+                </span>
+              </div>
+              {/* DAILY INCOME */}
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                <div style={{
+                  width:36, height:36, borderRadius:'50%',
+                  border:'2px solid #eab308', display:'flex', alignItems:'center', justifyContent:'center',
+                  background:'rgba(234,179,8,0.08)',
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize:9, fontWeight:800, color:'#eab308', textAlign:'center', letterSpacing:'0.04em', lineHeight:1.2 }}>
+                  DAILY INCOME<br/>OPPORTUNITY
+                </span>
+              </div>
+            </div>
+
+            {/* EARN DAILY pill */}
+            <div style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)',
+              borderRadius:999, padding:'8px 20px',
+            }}>
+              <CheckCircle2 style={{ width:15, height:15, color:'#a78bfa' }} />
+              <span style={{ fontSize:10, fontWeight:800, color:'rgba(255,255,255,0.88)', letterSpacing:'0.1em' }}>
+                EARN DAILY &bull; NO RISK &bull; NO INVESTMENT
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            2. EARNING CARDS — stacked full-width
-            ══════════════════════════════════════════════════════ */}
-        <div className="space-y-3">
-
-          {/* TODAY'S EARNING */}
-          <div className="anim-slide-1 earning-card rounded-2xl"
-            style={{ background: 'linear-gradient(135deg,#059669 0%,#10b981 55%,#34d399 100%)' }}>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 w-11 h-11
-              bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <div className="px-5 py-4 pr-20">
-              <p className="text-white/75 text-[10px] font-extrabold uppercase tracking-[0.18em] mb-1">Today's Earning</p>
-              <p className="text-2xl sm:text-3xl font-black text-white drop-shadow">
+        {/* ── 2. TODAY'S EARNING ───────────────────────────────── */}
+        <div className="s1 dash-card-shimmer rounded-2xl" style={{
+          background:'linear-gradient(135deg, #059669 0%, #047857 100%)',
+          padding:'18px 16px',
+          boxShadow:'0 4px 20px rgba(5,150,105,0.3)',
+        }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <p style={{ color:'rgba(255,255,255,0.7)', fontSize:10, fontWeight:700, letterSpacing:'0.16em', textTransform:'uppercase', marginBottom:4 }}>
+                TODAY'S EARNING
+              </p>
+              <p style={{ fontSize:32, fontWeight:900, color:'white', lineHeight:1 }}>
                 <CountUpAmount value={income?.daily?.net ?? 0} />
               </p>
             </div>
-          </div>
-
-          {/* MONTHLY EARNING */}
-          <div className="anim-slide-2 earning-card rounded-2xl"
-            style={{ background: 'linear-gradient(135deg,#1d4ed8 0%,#3b82f6 55%,#60a5fa 100%)' }}>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 w-11 h-11
-              bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <CalendarDays className="w-5 h-5 text-white" />
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ textAlign:'right' }}>
+                <p style={{ fontSize:10, fontWeight:900, color:'white', lineHeight:1.3 }}>
+                  <span style={{ color:'#86efac' }}>100%</span> WITHOUT
+                </p>
+                <p style={{ fontSize:10, fontWeight:900, color:'white' }}>INVESTMENT</p>
+              </div>
+              <div style={{
+                width:40, height:40, borderRadius:10,
+                background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                <TrendingUp style={{ width:20, height:20, color:'white' }} />
+              </div>
             </div>
-            <div className="px-5 py-4 pr-20">
-              <p className="text-white/75 text-[10px] font-extrabold uppercase tracking-[0.18em] mb-1">Monthly Earning</p>
-              <p className="text-2xl sm:text-3xl font-black text-white drop-shadow">
+          </div>
+        </div>
+
+        {/* ── 3. MONTHLY EARNING ───────────────────────────────── */}
+        <div className="s2 dash-card-shimmer rounded-2xl" style={{
+          background:'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)',
+          padding:'18px 16px',
+          boxShadow:'0 4px 20px rgba(29,78,216,0.3)',
+        }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <p style={{ color:'rgba(255,255,255,0.7)', fontSize:10, fontWeight:700, letterSpacing:'0.16em', textTransform:'uppercase', marginBottom:4 }}>
+                MONTHLY EARNING
+              </p>
+              <p style={{ fontSize:32, fontWeight:900, color:'white', lineHeight:1 }}>
                 <CountUpAmount value={income?.monthly?.net ?? 0} />
               </p>
             </div>
-          </div>
-
-          {/* TOTAL EARNING */}
-          <div className="anim-slide-3 earning-card rounded-2xl"
-            style={{ background: 'linear-gradient(135deg,#c2410c 0%,#f97316 55%,#fb923c 100%)' }}>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 w-11 h-11
-              bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ textAlign:'right' }}>
+                <p style={{ fontSize:10, fontWeight:900, color:'#93c5fd', lineHeight:1.3 }}>CONSISTENT</p>
+                <p style={{ fontSize:10, fontWeight:900, color:'#93c5fd' }}>GROWTH</p>
+              </div>
+              <div style={{
+                width:40, height:40, borderRadius:10,
+                background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                <CalendarDays style={{ width:20, height:20, color:'white' }} />
+              </div>
             </div>
-            <div className="px-5 py-4 pr-20">
-              <p className="text-white/75 text-[10px] font-extrabold uppercase tracking-[0.18em] mb-1">Total Earning</p>
-              <p className="text-2xl sm:text-3xl font-black text-white drop-shadow">
+          </div>
+        </div>
+
+        {/* ── 4. TOTAL EARNING ─────────────────────────────────── */}
+        <div className="s3 dash-card-shimmer rounded-2xl" style={{
+          background:'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
+          padding:'18px 16px',
+          boxShadow:'0 4px 20px rgba(234,88,12,0.3)',
+        }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <p style={{ color:'rgba(255,255,255,0.7)', fontSize:10, fontWeight:700, letterSpacing:'0.16em', textTransform:'uppercase', marginBottom:4 }}>
+                TOTAL EARNING
+              </p>
+              <p style={{ fontSize:32, fontWeight:900, color:'white', lineHeight:1 }}>
                 <CountUpAmount value={income?.lifetime?.net ?? 0} />
               </p>
             </div>
-          </div>
-
-          {/* AVAILABLE WITHDRAWAL BALANCE — withdraw CTA */}
-          <div
-            className="anim-slide-4 earning-card rounded-2xl cursor-pointer active:scale-[0.98] transition-transform"
-            style={{ background: 'linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a78bfa 100%)' }}
-            onClick={() => setPage('payout')}
-          >
-            {/* Animated pulsing ring on icon */}
-            <div className="absolute right-5 top-1/2 -translate-y-1/2">
-              <div className="absolute inset-0 rounded-xl bg-white/30 animate-ping opacity-30" />
-              <div className="relative w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-                <Wallet className="w-5 h-5 text-white" />
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ textAlign:'right' }}>
+                <p style={{ fontSize:10, fontWeight:900, color:'#fde68a', lineHeight:1.3 }}>REAL INCOME</p>
+                <p style={{ fontSize:10, fontWeight:900, color:'#fde68a' }}>REAL RESULTS</p>
+              </div>
+              <div style={{
+                width:40, height:40, borderRadius:10,
+                background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                <Sparkles style={{ width:20, height:20, color:'white' }} />
               </div>
             </div>
-            <div className="px-5 py-4 pr-20">
-              <p className="text-white/75 text-[10px] font-extrabold uppercase tracking-[0.18em] mb-1">Available Withdrawal Balance</p>
-              <p className="text-2xl sm:text-3xl font-black text-white drop-shadow">
+          </div>
+        </div>
+
+        {/* ── 5. AVAILABLE WITHDRAWAL BALANCE ──────────────────── */}
+        <div
+          className="s4 dash-card-shimmer rounded-2xl cursor-pointer active:scale-[0.99] transition-transform"
+          style={{
+            background:'linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%)',
+            padding:'18px 16px',
+            boxShadow:'0 4px 20px rgba(109,40,217,0.35)',
+          }}
+          onClick={() => setPage('payout')}
+        >
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <p style={{ color:'rgba(255,255,255,0.65)', fontSize:10, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', marginBottom:4 }}>
+                AVAILABLE WITHDRAWAL BALANCE
+              </p>
+              <p style={{ fontSize:32, fontWeight:900, color:'white', lineHeight:1 }}>
                 <CountUpAmount value={income?.lifetime?.availableBalance ?? 0} />
               </p>
-              <p className="text-white/55 text-[10px] font-semibold mt-0.5 flex items-center gap-1">
-                Tap to withdraw
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ textAlign:'right' }}>
+                <p style={{ fontSize:10, fontWeight:900, color:'#c4b5fd', lineHeight:1.3 }}>EASY WITHDRAWAL</p>
+                <p style={{ fontSize:10, fontWeight:900, color:'#c4b5fd' }}>ANYTIME</p>
+              </div>
+              <div style={{
+                width:40, height:40, borderRadius:10,
+                background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                <Wallet style={{ width:20, height:20, color:'white' }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 6. START TODAY BANNER ────────────────────────────── */}
+        <div className="s5 rounded-2xl" style={{
+          background:'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+          border:'1px solid rgba(255,255,255,0.08)',
+          padding:'14px 16px',
+          display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
+            <div style={{
+              width:36, height:36, borderRadius:8, flexShrink:0,
+              background:'rgba(234,179,8,0.15)', border:'1px solid rgba(234,179,8,0.3)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>
+              <Zap style={{ width:18, height:18, color:'#eab308', fill:'#eab308' }} />
+            </div>
+            <div>
+              <p style={{ fontSize:11, fontWeight:900, color:'white', letterSpacing:'0.06em', lineHeight:1.3 }}>
+                ⚡ START TODAY • EARN EVERYDAY
+              </p>
+              <p style={{ fontSize:9, fontWeight:600, color:'rgba(255,255,255,0.45)', marginTop:2 }}>
+                Join Fintech Hub India &amp; Build Your Future
               </p>
             </div>
           </div>
-
-        </div>
-
-        {/* ══════════════════════════════════════════════════════
-            3. WITHOUT INVESTMENT WORK CARD
-            ══════════════════════════════════════════════════════ */}
-        <div className="anim-slide-5 relative overflow-hidden rounded-3xl card-hover-3d">
-          <div className="absolute inset-0 rounded-3xl p-[2px] bg-gradient-to-r from-emerald-400 via-yellow-400 to-emerald-400 animate-pulse">
-            <div className="h-full w-full rounded-3xl bg-slate-950/90" />
-          </div>
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-emerald-400/20 rounded-full blur-3xl" />
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-yellow-400/20 rounded-full blur-3xl" />
-          <div className="no-investment-banner relative z-10 bg-gradient-to-br from-emerald-950/80 via-slate-950/90 to-yellow-950/80 rounded-3xl px-6 py-5 border border-emerald-500/30">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative shrink-0">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 via-green-400 to-yellow-400 flex items-center justify-center shadow-2xl shadow-emerald-500/40 animate-bounce">
-                  <TrendingUp className="w-8 h-8 text-white" />
-                </div>
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-400 border-2 border-slate-950 flex items-center justify-center animate-ping" />
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-400 border-2 border-slate-950 flex items-center justify-center">
-                  <span className="text-[8px] font-black text-slate-900">★</span>
-                </span>
-              </div>
-              <div className="text-center sm:text-left flex-1">
-                <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                  100% Genuine
-                </span>
-                <h2 className="shimmer-text text-3xl sm:text-4xl font-black tracking-tight leading-none">
-                  WITHOUT INVESTMENT
-                </h2>
-                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-wide mt-0.5">
-                  <span className="text-yellow-400">WORK</span>
-                </h3>
-                <p className="text-slate-300 text-sm mt-2 font-medium leading-relaxed">
-                  Bina investment ke kaam karo aur <span className="text-emerald-400 font-bold">unlimited earning</span> karo!
-                </p>
-              </div>
-              <div className="shrink-0 text-center">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-400/20 to-emerald-400/20 border border-yellow-400/30 flex flex-col items-center justify-center gap-1 shadow-xl backdrop-blur-sm">
-                  <Sparkles className="w-7 h-7 text-yellow-300" />
-                  <span className="text-[10px] font-black text-yellow-300 uppercase tracking-wider leading-tight text-center">Earn<br/>Daily</span>
-                </div>
-              </div>
+          {/* NO INVESTMENT badge */}
+          <div style={{
+            flexShrink:0, textAlign:'center',
+            background:'#ca8a04', borderRadius:10, padding:'8px 10px',
+            border:'1px solid #eab308',
+            minWidth:72,
+          }}>
+            <p style={{ fontSize:10, fontWeight:900, color:'white', lineHeight:1.2, letterSpacing:'0.04em' }}>NO</p>
+            <p style={{ fontSize:10, fontWeight:900, color:'white', letterSpacing:'0.04em' }}>INVESTMENT</p>
+            <div style={{
+              background:'#1e1b4b', borderRadius:5, padding:'2px 4px', marginTop:3,
+            }}>
+              <p style={{ fontSize:8.5, fontWeight:900, color:'#eab308', letterSpacing:'0.06em' }}>100% WORK</p>
             </div>
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            4. REFERRAL CODE & SPONSOR ID
-            ══════════════════════════════════════════════════════ */}
-        <div className="anim-slide-6 space-y-3">
-          <Card className="border border-white/10 shadow-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-violet-950 overflow-hidden relative rounded-3xl card-hover-3d">
+        {/* ── 7. REFERRAL CODE CARD ────────────────────────────── */}
+        <div className="s6">
+          <Card className="border border-white/10 shadow-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-violet-950 overflow-hidden relative rounded-3xl">
             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iYSIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVHJhbnNmb3JtPSJyb3RhdGUoNDUpIj48cGF0aCBkPSJNLTEwIDMwaDYwdi0yMGgtNjB6IiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDUpIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2EpIi8+PC9zdmc+')] opacity-30" />
             <CardContent className="p-5 relative">
               <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -466,7 +562,7 @@ export function DashboardPage() {
           </Card>
 
           {user?.sponsorId && (
-            <Card className="glass-premium border border-white/10 shadow-lg rounded-2xl">
+            <Card className="glass-premium border border-white/10 shadow-lg rounded-2xl mt-3">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 flex items-center justify-center shadow-lg">
@@ -482,12 +578,12 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* Available Passive Balance Card */}
-        <div className="anim-slide-6 rounded-3xl bg-gradient-to-r from-violet-600 to-fuchsia-600 p-6 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
+        {/* ── 8. PASSIVE BALANCE CARD ─────────────────────────── */}
+        <div className="rounded-3xl bg-gradient-to-r from-violet-600 to-fuchsia-600 p-6 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
           <div>
             <p className="text-white/80 font-medium text-sm">Available Passive Balance</p>
             <h2 className="text-4xl font-black text-white mt-1">
-              ₹{(income?.breakdown?.passive ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{passiveBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h2>
           </div>
           <button
@@ -499,33 +595,25 @@ export function DashboardPage() {
           </button>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            REFERRAL & PASSIVE EARNINGS (LEVEL 1, 2, 3)
-            ══════════════════════════════════════════════════════ */}
-        <div className="anim-slide-5 space-y-3">
-          <h2 className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Team Network & Passive Income</h2>
-          
+        {/* ── 9. TEAM NETWORK ─────────────────────────────────── */}
+        <div className="space-y-3">
+          <h2 className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Team Network &amp; Passive Income</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* DIRECT REFERRAL (LEVEL 1) */}
-            <Card className="glass-premium border border-white/10 shadow-xl rounded-3xl overflow-hidden card-hover-3d relative">
+            <Card className="glass-premium border border-white/10 shadow-xl rounded-3xl overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-violet-500/15" />
-              <CardContent className="p-5 relative z-10 flex flex-col justify-between h-full">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="inline-flex items-center gap-1.5 bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full">
-                      Level 1 • Direct
-                    </span>
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                      <Users className="w-4.5 h-4.5 text-indigo-300" />
-                    </div>
+              <CardContent className="p-5 relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="inline-flex items-center gap-1.5 bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full">
+                    Level 1 • Direct (7.5%)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-indigo-300" />
                   </div>
-                  
-                  <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Direct Referral Earnings</p>
-                  <p className="text-2xl font-black text-white mt-1 drop-shadow-md">
-                    <CountUpAmount value={income?.breakdown?.direct ?? 0} />
-                  </p>
                 </div>
-                
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Direct Referral Earnings</p>
+                <p className="text-2xl font-black text-white mt-1">
+                  <CountUpAmount value={income?.breakdown?.direct ?? 0} />
+                </p>
                 <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
                   <span className="text-slate-400">Total Referred Partners</span>
                   <span className="font-bold text-indigo-300">
@@ -535,181 +623,77 @@ export function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* PASSIVE TEAM INCOME (LEVEL 2 & 3) */}
-            <Card className="glass-premium border border-white/10 shadow-xl rounded-3xl overflow-hidden card-hover-3d relative">
+            <Card className="glass-premium border border-white/10 shadow-xl rounded-3xl overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/10 via-transparent to-pink-500/15" />
               <CardContent className="p-5 relative z-10">
                 <div className="flex items-center justify-between mb-3">
                   <span className="inline-flex items-center gap-1.5 bg-fuchsia-500/20 border border-fuchsia-400/30 text-fuchsia-300 text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full">
-                    Level 2 & 3 • Passive
+                    Level 2 • Passive (2.5%)
                   </span>
                   <div className="w-9 h-9 rounded-xl bg-fuchsia-500/20 border border-fuchsia-500/30 flex items-center justify-center">
-                    <TrendingUp className="w-4.5 h-4.5 text-fuchsia-300" />
+                    <TrendingUp className="w-4 h-4 text-fuchsia-300" />
                   </div>
                 </div>
-                
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Passive Network Earnings</p>
-                <p className="text-2xl font-black text-white mt-1 drop-shadow-md">
-                  <CountUpAmount value={income?.breakdown?.passive ?? 0} />
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Indirect Referral Earnings</p>
+                <p className="text-2xl font-black text-white mt-1">
+                  <CountUpAmount value={income?.breakdown?.level2 ?? 0} />
                 </p>
-                
-                <div className="mt-4 space-y-2 pt-3 border-t border-white/5">
-                  {/* LEVEL 2 BREAKDOWN */}
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400" />
-                      <span className="text-slate-300 font-medium">Level 2 (7.5% share)</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-white mr-2">
-                        <CountUpAmount value={income?.breakdown?.level2 ?? 0} />
-                      </span>
-                      <span className="text-slate-400 font-mono text-[10px]">
-                        ({downline?.meta?.levelBreakdown?.find(lb => lb.level === 2)?.count ?? 0} members)
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* LEVEL 3 BREAKDOWN */}
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
-                      <span className="text-slate-300 font-medium">Level 3 (2.5% share)</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-white mr-2">
-                        <CountUpAmount value={income?.breakdown?.level3 ?? 0} />
-                      </span>
-                      <span className="text-slate-400 font-mono text-[10px]">
-                        ({downline?.meta?.levelBreakdown?.find(lb => lb.level === 3)?.count ?? 0} members)
-                      </span>
-                    </div>
-                  </div>
+                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Total Referred Partners</span>
+                  <span className="font-bold text-fuchsia-300">
+                    {downline?.meta?.levelBreakdown?.find(lb => lb.level === 2)?.count ?? 0} Active
+                  </span>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            5. QUICK ACTIONS
-            ══════════════════════════════════════════════════════ */}
+        {/* ── 10. QUICK ACTIONS ───────────────────────────────── */}
         <div>
           <h2 className="text-[11px] font-bold text-slate-400 mb-3 tracking-widest uppercase">Quick Actions</h2>
           <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => setPage('submit-report')}
-              className="flex flex-col items-center p-4 glass-premium border border-white/10 rounded-2xl shadow-lg hover:shadow-xl hover:border-violet-500/40 transition-all duration-300 hover:-translate-y-1 active:scale-95 cursor-pointer"
-            >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20 mb-2">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-[11px] font-semibold text-slate-200">Submit Report</span>
-            </button>
-
-            <button
-              onClick={() => setPage('active-links')}
-              className="flex flex-col items-center p-4 glass-premium border border-white/10 rounded-2xl shadow-lg hover:shadow-xl hover:border-fuchsia-500/40 transition-all duration-300 hover:-translate-y-1 active:scale-95 cursor-pointer"
-            >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-fuchsia-400 to-pink-500 flex items-center justify-center shadow-lg shadow-fuchsia-500/25 mb-2">
-                <Link2 className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-[11px] font-semibold text-slate-200">Active Links</span>
-            </button>
-
-            <button
-              onClick={() => setPage('payout')}
-              className="flex flex-col items-center p-4 glass-premium border border-white/10 rounded-2xl shadow-lg hover:shadow-xl hover:border-indigo-500/40 transition-all duration-300 hover:-translate-y-1 active:scale-95 cursor-pointer"
-            >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 mb-2">
-                <Wallet className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-[11px] font-semibold text-slate-200">Payout</span>
-            </button>
+            {[
+              { page: 'submit-report' as const, icon: FileText, label: 'Submit Report', from:'from-violet-400', to:'to-fuchsia-500', shadow:'shadow-violet-500/20', hover:'hover:border-violet-500/40' },
+              { page: 'active-links' as const, icon: Link2, label: 'Active Links', from:'from-fuchsia-400', to:'to-pink-500', shadow:'shadow-fuchsia-500/25', hover:'hover:border-fuchsia-500/40' },
+              { page: 'payout' as const, icon: Wallet, label: 'Payout', from:'from-indigo-400', to:'to-violet-500', shadow:'shadow-indigo-500/25', hover:'hover:border-indigo-500/40' },
+            ].map(({ page, icon: Icon, label, from, to, shadow, hover }) => (
+              <button
+                key={page}
+                onClick={() => setPage(page)}
+                className={`flex flex-col items-center p-4 glass-premium border border-white/10 rounded-2xl shadow-lg hover:shadow-xl ${hover} transition-all duration-300 hover:-translate-y-1 active:scale-95 cursor-pointer`}
+              >
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${from} ${to} flex items-center justify-center shadow-lg ${shadow} mb-2`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-[11px] font-semibold text-slate-200">{label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Developer / Neurox Details */}
-        <div className="relative overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 shadow-[0_0_30px_rgba(139,92,246,0.15)] max-w-xs mx-auto mt-10 hover:shadow-[0_0_40px_rgba(139,92,246,0.25)] transition-all duration-500 hover:scale-[1.03] group">
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 opacity-30 group-hover:opacity-50 transition-opacity" />
-          <div className="relative z-10 rounded-[15px] bg-slate-950/90 backdrop-blur-xl p-4 text-center">
-            
-            {/* Tiny top glowing banner */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-[8px] font-black tracking-widest uppercase mb-3 select-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
-              Developed &amp; Maintained By
-            </div>
-
-            {/* Neurox logo & text */}
-            <h3 className="text-xs font-black bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent tracking-widest leading-none group-hover:scale-105 transition-transform duration-500 uppercase">
-              Neurox Technology
-            </h3>
-            
-            {/* Developer name */}
-            <p className="text-[10px] font-bold text-slate-400 mt-1.5 uppercase tracking-widest">
-              Zaheer Abbas
-            </p>
-
-            {/* Glowing divider line */}
-            <div className="w-12 h-[2px] bg-gradient-to-r from-violet-500 to-fuchsia-500 mx-auto my-3.5 opacity-60 group-hover:w-20 transition-all duration-500" />
-
-            {/* Button links */}
-            <div className="flex gap-2 mt-1 justify-center">
-              <a
-                href="https://wa.me/+918453031680"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-300 text-[10px] font-bold tracking-wide transition-all duration-300 active:scale-95 cursor-pointer shadow-lg hover:shadow-emerald-500/5"
-              >
-                WhatsApp
-              </a>
-              <a
-                href="https://www.instagram.com/neuroxtechnology/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 text-pink-300 text-[10px] font-bold tracking-wide transition-all duration-300 active:scale-95 cursor-pointer shadow-lg hover:shadow-pink-500/5"
-              >
-                Instagram
-              </a>
-            </div>
+        {/* ── 11. TRUSTED FOOTER PILL ─────────────────────────── */}
+        <div className="flex justify-center pt-2">
+          <div style={{
+            display:'inline-flex', alignItems:'center', gap:6,
+            background:'#10b981', color:'#022c22',
+            borderRadius:999, padding:'6px 20px',
+            fontSize:9, fontWeight:900, letterSpacing:'0.12em', textTransform:'uppercase',
+            boxShadow:'0 0 20px rgba(16,185,129,0.4)',
+          }}>
+            TRUSTED &bull; TRANSPARENT ⭐ &bull; SUCCESS
           </div>
         </div>
 
       </div>
 
-      {/* ── UNDER CONSTRUCTION MODAL ── */}
+      {/* PASSIVE WITHDRAW MODAL */}
       {showPassiveModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={() => setShowPassiveModal(false)}
-        >
-          <div
-            className="relative bg-gradient-to-br from-slate-900 via-slate-900 to-violet-950 border border-violet-500/30 rounded-3xl p-8 max-w-sm w-full text-center shadow-[0_25px_80px_rgba(139,92,246,0.35)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Glow */}
-            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5" />
-            <div className="relative z-10">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-400/10 border border-amber-400/30 flex items-center justify-center mx-auto mb-5 text-4xl shadow-lg">
-                🚧
-              </div>
-              <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
-                Coming Soon
-              </div>
-              <h2 className="text-xl font-black text-white mb-2">Under Construction</h2>
-              <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                Passive income withdrawal is coming very soon! We're building it and will notify you once it's live.
-              </p>
-              <button
-                onClick={() => setShowPassiveModal(false)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-bold text-sm transition-all duration-300 cursor-pointer active:scale-[0.98]"
-              >
-                Got it, I'll wait! 🙌
-              </button>
-            </div>
-          </div>
-        </div>
+        <PassiveWithdrawModal
+          onClose={() => setShowPassiveModal(false)}
+          availableBalance={passiveBalance}
+          onSuccess={() => triggerRefresh()}
+        />
       )}
     </>
   );

@@ -11,14 +11,14 @@ import { toast } from 'sonner';
 import { Link2, Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-interface LinkItem { id: string; appName: string; link: string; status: string; sortOrder: number; }
+interface LinkItem { id: string; appName: string; link: string; status: string; sortOrder: number; logoUrl?: string; }
 
 export function AdminLinksPage() {
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<LinkItem | null>(null);
-  const [form, setForm] = useState({ appName: '', link: '', status: 'active', sortOrder: 0 });
+  const [form, setForm] = useState({ appName: '', link: '', status: 'active', sortOrder: 0, logoUrl: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { fetchLinks(); }, []);
@@ -30,8 +30,8 @@ export function AdminLinksPage() {
     finally { setLoading(false); }
   }
 
-  function openCreate() { setEditing(null); setForm({ appName: '', link: '', status: 'active', sortOrder: 0 }); setDialogOpen(true); }
-  function openEdit(l: LinkItem) { setEditing(l); setForm({ appName: l.appName, link: l.link, status: l.status, sortOrder: l.sortOrder }); setDialogOpen(true); }
+  function openCreate() { setEditing(null); setForm({ appName: '', link: '', status: 'active', sortOrder: 0, logoUrl: '' }); setDialogOpen(true); }
+  function openEdit(l: LinkItem) { setEditing(l); setForm({ appName: l.appName, link: l.link, status: l.status, sortOrder: l.sortOrder, logoUrl: l.logoUrl || '' }); setDialogOpen(true); }
 
   async function handleSave() {
     setSaving(true);
@@ -86,7 +86,16 @@ export function AdminLinksPage() {
               <tbody>
                 {links.map((l) => (
                   <tr key={l.id} className="border-b border-white/5 hover:bg-violet-500/5 transition-colors">
-                    <td className="p-3 text-sm font-semibold text-white">{l.appName}</td>
+                    <td className="p-3 text-sm font-semibold text-white flex items-center gap-3">
+                      {l.logoUrl ? (
+                        <img src={l.logoUrl} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/10" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-slate-400">
+                          FHI
+                        </div>
+                      )}
+                      <span>{l.appName}</span>
+                    </td>
                     <td className="p-3 text-sm text-slate-400 max-w-xs truncate">{l.link}</td>
                     <td className="p-3"><StatusBadge status={l.status} /></td>
                     <td className="p-3 text-right">
@@ -117,6 +126,7 @@ export function AdminLinksPage() {
           <DialogHeader><DialogTitle className="text-white font-bold">{editing ? 'Edit Link' : 'Add Link'}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
             <div><Label className="text-slate-300">App Name *</Label><Input value={form.appName} onChange={(e) => setForm({ ...form, appName: e.target.value })} className="mt-1 bg-white/5 border-white/10 text-white rounded-xl" /></div>
+            <div><Label className="text-slate-300">App Logo URL</Label><Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://example.com/logo.png (Optional)" className="mt-1 bg-white/5 border-white/10 text-white rounded-xl" /></div>
             <div><Label className="text-slate-300">Link *</Label><Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} className="mt-1 bg-white/5 border-white/10 text-white rounded-xl" /></div>
             <div>
               <Label className="text-slate-300">Status</Label>

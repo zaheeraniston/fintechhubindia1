@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, UserPlus, MessageCircle, Info, CheckCircle2, KeyRound, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 export function SignupPage() {
-  const { setPage, setUser } = useAppStore();
+  const { setPage, setPendingCelebration } = useAppStore();
   const { settings } = useSettingsStore();
   const [form, setForm] = useState({
     fullName: '',
@@ -153,15 +153,24 @@ export function SignupPage() {
         body: JSON.stringify({ ...form, dailyAccessCode: form.dailyAccessCode.trim() }),
       });
       localStorage.setItem('fintech_token', data.token);
-      setUser(data.user);
-      toast.success('Account created successfully! Your Referral ID: ' + data.user.referralId);
-      setPage('dashboard');
+      // ✅ Store celebration in GLOBAL store so it survives if App.tsx auth listener
+      // triggers setLoading(true) and unmounts this component.
+      // App.tsx will render WelcomeCelebration at top level when pendingCelebration is set.
+      setPendingCelebration({
+        name: data.user.fullName || form.fullName,
+        email: form.email,
+        password: form.password,
+        referralId: data.user.referralId,
+        userData: data.user,
+      });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed');
     } finally {
       setLoading(false);
     }
   }
+
+  // Celebration is now rendered globally in App.tsx — nothing to render here
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-4 relative overflow-hidden text-slate-100">
